@@ -125,13 +125,23 @@ jobs:
           FILES=(out/drivemate.pmtiles out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz)
           up() { for i in 1 2 3 4 5; do gh release upload "$1" "$2" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $2"; return 1; }
           # The release phones use now: kept whatever happens.
-          CURRENT=$(curl -sfL "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/latest.json" | jq -r '.tag // empty' || true)
-          echo "Phones are on: ${CURRENT:-none yet}"
+          # pointer: prints the release latest.json names; "none" if there's no pointer yet; fails otherwise.
+          pointer() {
+            local code
+            code=$(curl -sL -o work/pointer.json -w '%{http_code}' "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/latest.json") || return 1
+            if [ "$code" = 404 ]; then echo none; return 0; fi
+            [ "$code" = 200 ] || return 1
+            jq -er '.tag' work/pointer.json
+          }
+          # The release phones use now: never deleted. If it can't be read, nothing is deleted.
+          if CURRENT=$(pointer); then CLEAN=1; else CURRENT=""; CLEAN=0; echo "::warning::couldn't read the pointer; old releases are left alone this time"; fi
+          echo "Phones are on: $CURRENT"
 
           gh release create "$NEW" --title "Map data: UK, $(date -u '+%d %b %Y')" --prerelease \
             --notes "DriveMate's own map files (© OpenStreetMap contributors, ODbL; Overture Maps; contains OS data © Crown copyright). Phones use whichever release map-data-uk/latest.json points to."
           # If anything below fails, remove the unfinished release so it's never used or counted.
-          trap 'if [ "${SWITCHED:-0}" != 1 ]; then gh release delete "$NEW" --cleanup-tag -y || true; fi' EXIT
+          # (Unless the pointer already names it — an upload can arrive even when its reply is lost.)
+          trap 'if [ "${SWITCHED:-0}" != 1 ] && [ "$(pointer 2>/dev/null)" != "$NEW" ]; then gh release delete "$NEW" --cleanup-tag -y || true; fi' EXIT
 
           failed=0
           for f in "${FILES[@]}"; do up "$NEW" "$f" || failed=1; done
@@ -155,7 +165,7 @@ jobs:
           SWITCHED=1
 
           # Remove dated releases other than the new one and the one phones were on until now.
-          { gh release list --limit 100 --json tagName --jq '.[].tagName' | grep -E '^map-data-[0-9]{4}-' || true; } |
+          [ "$CLEAN" = 1 ] && { gh release list --limit 100 --json tagName --jq '.[].tagName' | grep -E '^map-data-[0-9]{4}-' || true; } |
             while read -r old; do
               if [ "$old" != "$NEW" ] && [ "$old" != "$CURRENT" ]; then gh release delete "$old" --cleanup-tag -y || true; fi
             done
