@@ -1,0 +1,129 @@
+name: Build our own map data
+
+# Downloads the base map data and builds DriveMate's own map files for the whole UK:
+#  - drivemate.pmtiles: the map pictures (the app fetches just the squares it needs)
+#  - lanes-<row>_<col>.json: lane counts and arrows, in half-degree squares (fetched along your route)
+#  - places-<row>_<col>.json.gz: businesses and places from Overture, quarter-degree squares (for search)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1" # every Monday morning, to stay up to date
+  push:
+    branches: [main]
+    paths: [".github/workflows/map-data.yml", "scripts/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: map-data
+  cancel-in-progress: true
+
+env:
+  REGION: europe/united-kingdom
+  TAG: map-data-uk
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make room
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool jq > /dev/null
+          mkdir -p work out/lanes
+
+      - name: Check the Ordnance Survey key
+        env:
+          OS_API_KEY: ${{ secrets.OS_API_KEY }}
+        run: |
+          if [ -z "$OS_API_KEY" ]; then echo "::warning::OS_API_KEY secret not set"; exit 0; fi
+          code=$(curl -s -o /dev/null -w "%{http_code}" "https://api.os.uk/search/names/v1/find?query=Stockport&maxresults=1&key=$OS_API_KEY")
+          if [ "$code" = "200" ]; then echo "::notice::Ordnance Survey key works"; else echo "::warning::Ordnance Survey key check returned HTTP $code"; fi
+
+      - name: OpenStreetMap base (Geofabrik, whole UK)
+        run: |
+          curl -sSfL -o work/base.osm.pbf "https://download.geofabrik.de/${REGION}-latest.osm.pbf"
+          ls -lh work/base.osm.pbf
+
+      - name: Our own map tiles (Planetiler, same layout the app's map style uses)
+        shell: bash
+        run: |
+          set -o pipefail
+          curl -sSfL -o work/planetiler.jar https://github.com/onthegomap/planetiler/releases/latest/download/planetiler.jar
+          java -Xmx12g -jar work/planetiler.jar --osm-path=work/base.osm.pbf --output=out/drivemate.pmtiles \
+            --download --download-dir=work/sources --force 2>&1 | tail -n 25
+          ls -lh out/drivemate.pmtiles
+          # GitHub allows 2 GB per file: if it's bigger, leave out house numbers (not needed while driving).
+          if [ $(stat -c %s out/drivemate.pmtiles) -gt 1950000000 ]; then
+            echo "Too big for one download; rebuilding without house numbers"
+            java -Xmx12g -jar work/planetiler.jar --osm-path=work/base.osm.pbf --output=out/drivemate.pmtiles \
+              --download-dir=work/sources --force --exclude_layers=housenumber 2>&1 | tail -n 5
+            ls -lh out/drivemate.pmtiles
+          fi
+          echo "map_bytes=$(stat -c %s out/drivemate.pmtiles)" >> out/build-info.txt
+          # A real UK map is hundreds of MB; a tiny file means the build failed.
+          [ $(stat -c %s out/drivemate.pmtiles) -gt 50000000 ] || { echo "::error::Map file is too small - build failed"; exit 1; }
+
+      - name: Lane, junction and speed data (from OpenStreetMap), in squares
+        run: |
+          osmium tags-filter work/base.osm.pbf \
+            w/highway=motorway,trunk,primary,secondary,tertiary,unclassified,residential,motorway_link,trunk_link,primary_link,secondary_link,tertiary_link \
+            -o work/roads.osm.pbf --overwrite
+          osmium export work/roads.osm.pbf -f geojsonseq -o work/roads.geojsonseq --overwrite \
+            --geometry-types=linestring -a type,id
+          python3 scripts/lanes.py work/roads.geojsonseq out/lanes
+          ls out/lanes | wc -l; du -sh out/lanes
+
+      - name: Speed cameras and level crossings (whole UK)
+        run: |
+          osmium tags-filter work/base.osm.pbf n/highway=speed_camera n/railway=level_crossing r/type=enforcement \
+            -o work/cameras.osm.pbf --overwrite
+          osmium cat work/cameras.osm.pbf -f opl,add_metadata=false -o work/cameras.opl --overwrite
+          python3 scripts/cameras.py work/cameras.opl out/cameras-uk.json | tee -a out/build-info.txt
+          ls -lh out/cameras-uk.json
+
+      - name: Businesses, places and streets (Overture + OpenStreetMap + OS Open Names), merged, in squares
+        run: |
+          pip install -q overturemaps pyarrow pyproj
+          mkdir -p out/places work/osnames
+          # Overture (businesses)
+          overturemaps download --bbox=-8.7,49.8,1.8,60.9 -f geoparquet --type=place -o work/places.parquet || echo "::warning::Overture download failed"
+          # OpenStreetMap points of interest (from the UK file we already have)
+          osmium tags-filter work/base.osm.pbf nwr/amenity nwr/shop nwr/tourism nwr/leisure nwr/office nwr/craft nwr/healthcare \
+            -o work/pois.osm.pbf --overwrite
+          osmium tags-filter work/pois.osm.pbf nwr/name nwr/brand -o work/pois-named.osm.pbf --overwrite
+          osmium export work/pois-named.osm.pbf -f geojsonseq -o work/pois.geojsonseq --overwrite --geometry-types=point,polygon
+          # Ordnance Survey Open Names (official streets and places; free download)
+          url=$(curl -sSf "https://api.os.uk/downloads/v1/products/OpenNames/downloads?area=GB&format=CSV" | jq -r '.[0].url') && \
+            curl -sSfL -o work/opennames.zip "$url" && unzip -q -o work/opennames.zip -d work/osnames || echo "::warning::OS Open Names download failed"
+          python3 scripts/places.py out/places --overture work/places.parquet --osm work/pois.geojsonseq --osnames work/osnames
+          ls out/places | wc -l; du -sh out/places
+
+      - name: Publish the map files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Map data: UK" \
+            --notes "DriveMate's own map files, rebuilt weekly from OpenStreetMap (© OpenStreetMap contributors, ODbL)." --prerelease
+          gh release upload "$TAG" out/build-info.txt out/cameras-uk.json --clobber
+          gh release upload "$TAG" out/lanes/*.json out/places/*.json.gz --clobber
+          # The big map file last, with a few tries (large uploads sometimes drop).
+          for i in 1 2 3; do gh release upload "$TAG" out/drivemate.pmtiles --clobber && break; sleep 30; done
+          {
+            echo "## Map data built"
+            echo "Map file: $(du -h out/drivemate.pmtiles | cut -f1) · lane squares: $(ls out/lanes | wc -l) ($(du -sh out/lanes | cut -f1)) · place squares: $(ls out/places | wc -l) ($(du -sh out/places | cut -f1))"
+          } >> "$GITHUB_STEP_SUMMARY"
