@@ -121,20 +121,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NEW="map-data-$(date -u +%Y-%m-%d)-r${GITHUB_RUN_NUMBER}"
+          NEW="map-data-$(date -u +%Y-%m-%d)-r${GITHUB_RUN_NUMBER}a${GITHUB_RUN_ATTEMPT}"
+          FILES=(out/drivemate.pmtiles out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz)
+          up() { for i in 1 2 3 4 5; do gh release upload "$1" "$2" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $2"; return 1; }
+          # The release phones use now: kept whatever happens.
+          CURRENT=$(curl -sfL "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/latest.json" | jq -r '.tag // empty' || true)
+          echo "Phones are on: ${CURRENT:-none yet}"
+
           gh release create "$NEW" --title "Map data: UK, $(date -u '+%d %b %Y')" --prerelease \
             --notes "DriveMate's own map files (© OpenStreetMap contributors, ODbL; Overture Maps; contains OS data © Crown copyright). Phones use whichever release map-data-uk/latest.json points to."
-          up() { for i in 1 2 3 4 5; do gh release upload "$1" "$2" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $2"; return 1; }
+          # If anything below fails, remove the unfinished release so it's never used or counted.
+          trap 'if [ "${SWITCHED:-0}" != 1 ]; then gh release delete "$NEW" --cleanup-tag -y || true; fi' EXIT
+
           failed=0
-          for f in out/drivemate.pmtiles out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz; do
-            up "$NEW" "$f" || failed=1
-          done
+          for f in "${FILES[@]}"; do up "$NEW" "$f" || failed=1; done
           [ $failed = 0 ] || exit 1
 
           # Check every file is there with the right size before phones are switched over.
-          for f in out/drivemate.pmtiles out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz; do
-            echo "$(basename "$f") $(stat -c %s "$f")"
-          done | sort > work/expected.txt
+          for f in "${FILES[@]}"; do echo "$(basename "$f") $(stat -c %s "$f")"; done | sort > work/expected.txt
           id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$NEW" --jq .id)
           gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" \
             --jq '.[] | select(.state == "uploaded") | "\(.name) \(.size)"' | sort > work/published.txt
@@ -146,13 +150,21 @@ jobs:
           jq -n --arg tag "$NEW" --arg built "$(date -u +%FT%TZ)" \
             --argjson files "$(wc -l < work/expected.txt)" '{tag: $tag, built: $built, files: $files}' > out/latest.json
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Map data: UK (latest)" --prerelease \
-            --notes "latest.json here names the newest complete map data release."
+            --notes "latest.json names the newest complete map data release. The other files here are a copy for older app versions."
           up "$TAG" out/latest.json
+          SWITCHED=1
 
-          # Keep this release and the one before it (for phones mid-download); remove older ones.
-          gh release list --limit 100 --json tagName,createdAt \
-            --jq '[.[] | select(.tagName | test("^map-data-[0-9]{4}-"))] | sort_by(.createdAt) | reverse | .[2:] | .[].tagName' |
-            while read -r old; do gh release delete "$old" --cleanup-tag -y || true; done
+          # Remove dated releases other than the new one and the one phones were on until now.
+          { gh release list --limit 100 --json tagName --jq '.[].tagName' | grep -E '^map-data-[0-9]{4}-' || true; } |
+            while read -r old; do
+              if [ "$old" != "$NEW" ] && [ "$old" != "$CURRENT" ]; then gh release delete "$old" --cleanup-tag -y || true; fi
+            done
+
+          # Copy for older app versions (and phones that can't read the pointer). Best effort:
+          # phones on this version already use the new release.
+          copy_failed=0
+          for f in "${FILES[@]}"; do up "$TAG" "$f" || copy_failed=1; done
+          [ $copy_failed = 0 ] || echo "::warning::copy for older app versions is incomplete"
           {
             echo "## Map data built: $NEW"
             echo "Map file: $(du -h out/drivemate.pmtiles | cut -f1) · lane squares: $(ls out/lanes | wc -l) ($(du -sh out/lanes | cut -f1)) · place squares: $(ls out/places | wc -l) ($(du -sh out/places | cut -f1))"
