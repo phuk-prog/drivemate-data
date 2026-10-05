@@ -114,18 +114,46 @@ jobs:
           ls out/places | wc -l; du -sh out/places
 
       - name: Publish the map files
+        # Each build goes into its own dated release. Phones keep using the previous one until
+        # every file of the new one has uploaded and been checked; only then is the small
+        # pointer file (map-data-uk/latest.json) switched over. So a cut-off upload can never
+        # leave phones with a missing or half-updated map.
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Map data: UK" \
-            --notes "DriveMate's own map files, rebuilt weekly from OpenStreetMap (© OpenStreetMap contributors, ODbL)." --prerelease
-          # One file at a time, each retried: big batches of uploads can be cut off part-way.
-          up() { for i in 1 2 3 4 5; do gh release upload "$TAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
+          NEW="map-data-$(date -u +%Y-%m-%d)-r${GITHUB_RUN_NUMBER}"
+          gh release create "$NEW" --title "Map data: UK, $(date -u '+%d %b %Y')" --prerelease \
+            --notes "DriveMate's own map files (© OpenStreetMap contributors, ODbL; Overture Maps; contains OS data © Crown copyright). Phones use whichever release map-data-uk/latest.json points to."
+          up() { for i in 1 2 3 4 5; do gh release upload "$1" "$2" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $2"; return 1; }
           failed=0
-          up out/drivemate.pmtiles || failed=1
-          for f in out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz; do up "$f" || failed=1; done
+          for f in out/drivemate.pmtiles out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz; do
+            up "$NEW" "$f" || failed=1
+          done
           [ $failed = 0 ] || exit 1
+
+          # Check every file is there with the right size before phones are switched over.
+          for f in out/drivemate.pmtiles out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz; do
+            echo "$(basename "$f") $(stat -c %s "$f")"
+          done | sort > work/expected.txt
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$NEW" --jq .id)
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" \
+            --jq '.[] | select(.state == "uploaded") | "\(.name) \(.size)"' | sort > work/published.txt
+          if ! diff -u work/expected.txt work/published.txt; then
+            echo "::error::the new release is incomplete; phones stay on the previous map data"; exit 1
+          fi
+
+          # Switch phones over.
+          jq -n --arg tag "$NEW" --arg built "$(date -u +%FT%TZ)" \
+            --argjson files "$(wc -l < work/expected.txt)" '{tag: $tag, built: $built, files: $files}' > out/latest.json
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Map data: UK (latest)" --prerelease \
+            --notes "latest.json here names the newest complete map data release."
+          up "$TAG" out/latest.json
+
+          # Keep this release and the one before it (for phones mid-download); remove older ones.
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | test("^map-data-[0-9]{4}-"))] | sort_by(.createdAt) | reverse | .[2:] | .[].tagName' |
+            while read -r old; do gh release delete "$old" --cleanup-tag -y || true; done
           {
-            echo "## Map data built"
+            echo "## Map data built: $NEW"
             echo "Map file: $(du -h out/drivemate.pmtiles | cut -f1) · lane squares: $(ls out/lanes | wc -l) ($(du -sh out/lanes | cut -f1)) · place squares: $(ls out/places | wc -l) ($(du -sh out/places | cut -f1))"
           } >> "$GITHUB_STEP_SUMMARY"
