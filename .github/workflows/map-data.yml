@@ -24,6 +24,7 @@ concurrency:
 env:
   REGION: europe/united-kingdom
   TAG: map-data-uk
+  XTAG: map-data-uk-extra
 
 jobs:
   build:
@@ -97,7 +98,7 @@ jobs:
           MAPILLARY_MAX_FETCH: "15000"
         run: |
           # Last week's answers, so each week only checks the oldest or new junctions.
-          gh release download "$TAG" -p mapillary-arrows-cache.json.gz -D work --clobber 2>/dev/null || echo "no earlier arrows yet"
+          gh release download "$XTAG" -p mapillary-arrows-cache.json.gz -D work --clobber 2>/dev/null || gh release download "$TAG" -p mapillary-arrows-cache.json.gz -D work --clobber 2>/dev/null || echo "no earlier arrows yet"
           python3 scripts/arrows.py --selftest
           python3 scripts/arrows.py work/roads.geojsonseq out/lanes work/mapillary-arrows-cache.json.gz out/mapillary-arrows-cache.json.gz \
             || echo "::warning::Painted arrows step failed; lane files kept as they were"
@@ -141,7 +142,7 @@ jobs:
           osmium tags-filter work/base.osm.pbf w/highway=motorway -o work/motorways.osm.pbf --overwrite
           osmium export work/motorways.osm.pbf -f geojsonseq -o work/motorways.geojsonseq --overwrite --geometry-types=linestring -u type_id
           # Speed-limit signs found in Mapillary photos in earlier weeks (only old or new areas are asked again).
-          gh release download "$TAG" -p mapillary-signs-cache.json.gz -D work --clobber 2>/dev/null || echo "no earlier signs yet"
+          gh release download "$XTAG" -p mapillary-signs-cache.json.gz -D work --clobber 2>/dev/null || echo "no earlier signs yet"
           python3 scripts/limits.py work/maxspeed.geojsonseq out/limits work/motorways.geojsonseq out/limit-checks.md \
             --roads work/roads.geojsonseq --signs-cache-in work/mapillary-signs-cache.json.gz \
             --signs-cache-out out/mapillary-signs-cache.json.gz | tee -a out/build-info.txt
@@ -220,10 +221,15 @@ jobs:
           up() { for i in 1 2 3 4 5; do gh release upload "$TAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
           failed=0
           up out/drivemate.pmtiles || failed=1
-          [ -f out/mapillary-arrows-cache.json.gz ] && { up out/mapillary-arrows-cache.json.gz || failed=1; }
-          [ -f out/mapillary-signs-cache.json.gz ] && { up out/mapillary-signs-cache.json.gz || failed=1; }
-          [ -f out/search-offline-uk.tsv.gz ] && { up out/search-offline-uk.tsv.gz || failed=1; }
-          for f in out/build-info.txt out/cameras-uk.json out/charge-zones-uk.json out/lanes/*.json out/limits/*.json out/roadinfo/*.json out/places/*.json.gz; do up "$f" || failed=1; done
+          for f in out/build-info.txt out/cameras-uk.json out/places/*.json.gz; do up "$f" || failed=1; done
+          # GitHub allows 1000 files per release and the one above is nearly full (780 place
+          # squares), so lanes, limits, road warnings, zones, search and the lookup caches go in
+          # their own release, map-data-uk-extra (the app reads them from there).
+          gh release view "$XTAG" >/dev/null 2>&1 || gh release create "$XTAG" --title "Map data: UK (lanes, limits, warnings, search)" --prerelease \
+            --notes "DriveMate's weekly road data: lanes, speed limits, warnings, charge zones and offline search (© OpenStreetMap contributors, ODbL; Mapillary CC BY-SA 4.0; TfL and OS data under the Open Government Licence)."
+          upx() { for i in 1 2 3 4 5; do gh release upload "$XTAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
+          for f in out/mapillary-arrows-cache.json.gz out/mapillary-signs-cache.json.gz out/search-offline-uk.tsv.gz; do [ -f "$f" ] && { upx "$f" || failed=1; }; done
+          for f in out/charge-zones-uk.json out/lanes/*.json out/limits/*.json out/roadinfo/*.json; do upx "$f" || failed=1; done
           [ $failed = 0 ] || exit 1
           {
             echo "## Map data built"
