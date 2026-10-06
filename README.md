@@ -10,7 +10,9 @@ Open map data for the DriveMate navigation app, rebuilt every week by
 | `lanes-<row>_<col>.json` | Lane counts and lane arrows, in half-degree squares (arrows from OpenStreetMap, plus painted arrows seen in Mapillary street photos where the map has none: `turn:lanes:source=mapillary`) |
 | `mapillary-arrows-cache.json.gz` | The painted arrows found near each junction, kept so each week only re-checks the oldest |
 | `places-<row>_<col>.json.gz` | Businesses, places and streets, merged and de-duplicated, quarter-degree squares |
-| `limits-<row>_<col>.json` | Speed limits on roads, in half-degree squares |
+| `limits-<row>_<col>.json` | Speed limits on roads, in half-degree squares: `{"ways": [[kmh, [[lon, lat], ...]], ...], "src": ["o"\|"m", ...], "dir": [...], "source": "..."}`. `ways` is what the app reads; `src` says where each came from (`o` OpenStreetMap, `m` speed-limit signs seen in Mapillary street photos, used only where OpenStreetMap has no limit, or for Welsh roads still mapped at 30 where 20 mph signs confirm the change); `dir` holds limits known for one direction of a two-way road only (points in travel order; not used by the app yet). Roads with no known limit are left out |
+| `mapillary-signs-cache.json.gz` | The speed-limit signs found in each area, kept so each week only re-checks the oldest areas |
+| `limit-checks.md` (on the run's summary page) | Limits that look wrong, including Welsh roads mapped at 30 mph where photos show 20 mph signs |
 | `roadinfo-<row>_<col>.json` | Road warnings and turn landmarks, in half-degree squares: speed bumps, hazard signs, speed cameras, level crossings, toll booths, schools, traffic lights, stop signs and well-known named places (fuel stations, pubs, places of worship, fast food, supermarkets). Same layout as an Overpass answer, so the app reads it with no signal |
 | `cameras-uk.json` | Speed / red-light / average-speed cameras and level crossings |
 | `charge-zones-uk.json` | Charge and emission zones with what each means for a car: London Congestion Charge and London-wide ULEZ (official TfL boundaries), Birmingham Clean Air Zone (inside the A4540 Middleway, traced from OpenStreetMap because the council's own file is not openly licensed), and the other Clean Air Zones / Scottish LEZs mapped in OpenStreetMap |
@@ -23,11 +25,15 @@ build only after its pieces have uploaded and six test journeys across the UK ha
 Sources and licences:
 - © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/)
 - [Overture Maps](https://overturemaps.org) places (CDLA Permissive 2.0 / ODbL as published)
-- Painted lane arrows: [Mapillary](https://www.mapillary.com) contributors, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+- Painted lane arrows and speed-limit signs: [Mapillary](https://www.mapillary.com) contributors, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 - Contains OS data © Crown copyright and database right (OS Open Names, Open Government Licence)
 - Congestion Charge and ULEZ boundaries: contains Transport for London data (London Datastore, Open Government Licence v2)
 
 Only open data is published here.
 
-The painted-arrow step needs a free Mapillary key as the repository secret `MAPILLARY_TOKEN`
-(Settings → Secrets and variables → Actions). Without it the step keeps last week's arrows.
+The painted-arrow and speed-limit-sign steps need a free Mapillary key as the repository secret `MAPILLARY_TOKEN`
+(Settings → Secrets and variables → Actions). Without it they keep last week's arrows and signs.
+
+National Highways (checked Oct 2026) has no free download of permanent speed limits (its open
+Network Model has none; its keyed APIs cover only roadworks limits and roadside features), so
+nothing is taken from it.

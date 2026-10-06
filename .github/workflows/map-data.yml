@@ -126,13 +126,24 @@ jobs:
           python3 scripts/cameras.py work/cameras.opl out/cameras-uk.json | tee -a out/build-info.txt
           ls -lh out/cameras-uk.json
 
-      - name: Speed limits (whole UK), in squares
+      - name: Speed limits (whole UK, OpenStreetMap + street-photo signs where it has none), in squares
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
+          MAPILLARY_SIGNS_MAX_FETCH: "4000"
         run: |
+          set -o pipefail
+          python3 scripts/limits.py --selftest
           osmium tags-filter work/base.osm.pbf w/maxspeed -o work/maxspeed.osm.pbf --overwrite
           osmium export work/maxspeed.osm.pbf -f geojsonseq -o work/maxspeed.geojsonseq --overwrite --geometry-types=linestring -u type_id
           osmium tags-filter work/base.osm.pbf w/highway=motorway -o work/motorways.osm.pbf --overwrite
           osmium export work/motorways.osm.pbf -f geojsonseq -o work/motorways.geojsonseq --overwrite --geometry-types=linestring -u type_id
-          python3 scripts/limits.py work/maxspeed.geojsonseq out/limits work/motorways.geojsonseq out/limit-checks.md | tee -a out/build-info.txt
+          # Speed-limit signs found in Mapillary photos in earlier weeks (only old or new areas are asked again).
+          gh release download "$TAG" -p mapillary-signs-cache.json.gz -D work --clobber 2>/dev/null || echo "no earlier signs yet"
+          python3 scripts/limits.py work/maxspeed.geojsonseq out/limits work/motorways.geojsonseq out/limit-checks.md \
+            --roads work/roads.geojsonseq --signs-cache-in work/mapillary-signs-cache.json.gz \
+            --signs-cache-out out/mapillary-signs-cache.json.gz | tee -a out/build-info.txt
           ls out/limits | wc -l; du -sh out/limits
           # The list of limits that look wrong, on the run's summary page.
           cat out/limit-checks.md >> "$GITHUB_STEP_SUMMARY"
@@ -198,6 +209,7 @@ jobs:
           failed=0
           up out/drivemate.pmtiles || failed=1
           [ -f out/mapillary-arrows-cache.json.gz ] && { up out/mapillary-arrows-cache.json.gz || failed=1; }
+          [ -f out/mapillary-signs-cache.json.gz ] && { up out/mapillary-signs-cache.json.gz || failed=1; }
           for f in out/build-info.txt out/cameras-uk.json out/charge-zones-uk.json out/lanes/*.json out/limits/*.json out/roadinfo/*.json out/places/*.json.gz; do up "$f" || failed=1; done
           [ $failed = 0 ] || exit 1
           {
