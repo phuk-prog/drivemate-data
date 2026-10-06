@@ -14,6 +14,7 @@ Open map data for the DriveMate navigation app, rebuilt every week by
 | `mapillary-signs-cache.json.gz` | The speed-limit signs found in each area, kept so each week only re-checks the oldest areas |
 | `limit-checks.md` (on the run's summary page) | Limits that look wrong, including Welsh roads mapped at 30 mph where photos show 20 mph signs |
 | `roadinfo-<row>_<col>.json` | Road warnings and turn landmarks, in half-degree squares: speed bumps, hazard signs, speed cameras, level crossings, toll booths, schools, traffic lights, stop signs and well-known named places (fuel stations, pubs, places of worship, fast food, supermarkets). Same layout as an Overpass answer, so the app reads it with no signal |
+| `search-offline-uk.tsv.gz` | Offline search (about 31 MB): every postcode in Great Britain (1.7 million), every named street, and towns, villages, stations, hospitals, schools, airports, ferry ports and motorway services, from OS Open Names. Format below |
 | `cameras-uk.json` | Speed / red-light / average-speed cameras and level crossings |
 | `charge-zones-uk.json` | Charge and emission zones with what each means for a car: London Congestion Charge and London-wide ULEZ (official TfL boundaries), Birmingham Clean Air Zone (inside the A4540 Middleway, traced from OpenStreetMap because the council's own file is not openly licensed), and the other Clean Air Zones / Scottish LEZs mapped in OpenStreetMap |
 
@@ -26,10 +27,38 @@ Sources and licences:
 - © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/)
 - [Overture Maps](https://overturemaps.org) places (CDLA Permissive 2.0 / ODbL as published)
 - Painted lane arrows and speed-limit signs: [Mapillary](https://www.mapillary.com) contributors, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
-- Contains OS data © Crown copyright and database right (OS Open Names, Open Government Licence)
+- Contains OS data © Crown copyright and database right (OS Open Names, Open Government Licence); Contains Royal Mail data © Royal Mail copyright and database right; Contains National Statistics data © Crown copyright and database right
 - Congestion Charge and ULEZ boundaries: contains Transport for London data (London Datastore, Open Government Licence v2)
 
 Only open data is published here.
+
+### Offline search file format (`search-offline-uk.tsv.gz`)
+
+Gzip-compressed UTF-8 text, one record per line, fields separated by TAB.
+
+- Line 1 (header): `#drivemate-search-offline` TAB `1` (format version) TAB build date TAB credits (show these).
+- Every other line: `key` TAB `type` TAB `name` TAB `area` TAB `lat` TAB `lon`
+  - `key`: the name in lower case, accents removed, `&` → `and`, only a–z, 0–9 and single spaces
+    kept. Postcodes have no space (`sk82ez`). **Lines are sorted by key** (byte order), so everything
+    starting with what the driver typed is together: stream until past it, or binary-search an
+    unpacked copy.
+  - `type` (one letter): `P` postcode, `R` street, `C` city, `T` town, `V` village, `H` hamlet,
+    `S` suburb/area, `O` other settlement, `N` railway station, `B` bus/coach station,
+    `A` airport/airfield/heliport, `F` ferry terminal/harbour, `M` hospital/hospice/care home,
+    `E` school/college/university, `U` motorway services.
+  - `name`: as shown (`Menai Grove`). Welsh/Gaelic names are extra lines for the same place.
+    **Empty for postcodes**: show the key in capitals with a space before the last three
+    characters (`sk82ez` → `SK8 2EZ`).
+  - `area`: `Town, Postcode district` (`Cheadle, SK8`), or the council/county when there is no
+    town; for postcodes just the town.
+  - `lat`, `lon`: WGS84, 4 decimal places (~10 m). Postcode = its centre; street = a point on it.
+- Northern Ireland isn't in OS Open Names, so its postcodes and streets aren't in this file.
+
+Example lines:
+```
+menai grove	R	Menai Grove	Cheadle, SK8	53.3956	-2.1942
+sk82ez	P		Cheadle	53.3954	-2.1942
+```
 
 The painted-arrow and speed-limit-sign steps need a free Mapillary key as the repository secret `MAPILLARY_TOKEN`
 (Settings → Secrets and variables → Actions). Without it they keep last week's arrows and signs.

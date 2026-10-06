@@ -5,6 +5,7 @@ name: Build our own map data
 #  - lanes-<row>_<col>.json: lane counts and arrows, in half-degree squares (fetched along your route)
 #  - places-<row>_<col>.json.gz: businesses and places from Overture, quarter-degree squares (for search)
 #  - roadinfo-<row>_<col>.json: road warnings and turn landmarks, half-degree squares (fetched along your route)
+#  - search-offline-uk.tsv.gz: every GB postcode, street and named place, for search with no signal
 on:
   workflow_dispatch:
   schedule:
@@ -198,6 +199,17 @@ jobs:
           python3 scripts/places.py out/places --overture work/places.parquet --osm work/pois.geojsonseq --osnames work/osnames
           ls out/places | wc -l; du -sh out/places
 
+      - name: Offline postcode and place search (OS Open Names), one file for the phone
+        run: |
+          python3 scripts/search_offline.py --selftest
+          # No OS Open Names this week (download failed above): keep last week's file in the release.
+          if [ -z "$(find work/osnames -name '*.csv' 2>/dev/null | head -1)" ]; then
+            echo "::warning::No OS Open Names: offline search file not rebuilt this week"; exit 0
+          fi
+          python3 scripts/search_offline.py work/osnames out/search-offline-uk.tsv.gz | tee -a out/build-info.txt
+          ls -lh out/search-offline-uk.tsv.gz
+          echo "Offline search: $(du -h out/search-offline-uk.tsv.gz | cut -f1) ($(zcat out/search-offline-uk.tsv.gz | wc -l) lines)" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish the map files
         env:
           GH_TOKEN: ${{ github.token }}
@@ -210,6 +222,7 @@ jobs:
           up out/drivemate.pmtiles || failed=1
           [ -f out/mapillary-arrows-cache.json.gz ] && { up out/mapillary-arrows-cache.json.gz || failed=1; }
           [ -f out/mapillary-signs-cache.json.gz ] && { up out/mapillary-signs-cache.json.gz || failed=1; }
+          [ -f out/search-offline-uk.tsv.gz ] && { up out/search-offline-uk.tsv.gz || failed=1; }
           for f in out/build-info.txt out/cameras-uk.json out/charge-zones-uk.json out/lanes/*.json out/limits/*.json out/roadinfo/*.json out/places/*.json.gz; do up "$f" || failed=1; done
           [ $failed = 0 ] || exit 1
           {
