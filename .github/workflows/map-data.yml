@@ -137,12 +137,37 @@ jobs:
           # The list of limits that look wrong, on the run's summary page.
           cat out/limit-checks.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Charge and emission zones (ULEZ, Clean Air Zones, Scottish LEZs)
+      - name: Charge and emission zones (Congestion Charge, ULEZ, Clean Air Zones, Scottish LEZs)
+        shell: bash
         run: |
+          set -o pipefail
+          pip install -q pyproj shapely
+          python3 scripts/zones.py --selftest
           osmium tags-filter work/base.osm.pbf r/boundary=low_emission_zone w/boundary=low_emission_zone \
             -o work/zones.osm.pbf --overwrite
           osmium export work/zones.osm.pbf -f geojsonseq -o work/zones.geojsonseq --overwrite --geometry-types=polygon
-          python3 scripts/zones.py work/zones.geojsonseq out/charge-zones-uk.json | tee -a out/build-info.txt
+          # Official London boundaries (Transport for London on the London Datastore, Open Government
+          # Licence v2). If the direct link has moved, ask the Datastore for the dataset's current file.
+          # A failed download only means OpenStreetMap's zone (if any) is used: a warning, not a failure.
+          london() {  # dataset id, direct link, output file
+            curl -sSfL --retry 3 -m 180 -o "$3" "$2" && return 0
+            url=$(curl -sSf -m 60 "https://data.london.gov.uk/api/action/package_show?id=$1" |
+              jq -r '[.result.resources[] | select((.url // "") | test("\\.geojson$"; "i")) | .url][0] // empty') &&
+              [ -n "$url" ] && curl -sSfL --retry 3 -m 180 -o "$3" "$url" && return 0
+            echo "::warning::Could not download $3 from the London Datastore"; rm -f "$3"; return 1
+          }
+          official=()
+          london v8onw "https://data.london.gov.uk/download/v8onw/936d71d8-c5fc-40ad-a392-6bec86413b48/CentralUltraLowEmissionZone.geojson" \
+            work/london-ccz.geojson && official+=(--official "London Congestion Charge=work/london-ccz.geojson")
+          london vd455 "https://data.london.gov.uk/download/vd455/0cab9a8b-ca8a-47b0-aaf8-0e77a9041a19/LondonWideUltraLowEmissionZone.geojson" \
+            work/london-ulez.geojson && official+=(--official "London ULEZ=work/london-ulez.geojson")
+          # Birmingham's Clean Air Zone = inside the A4540 Middleway: traced from OpenStreetMap roads
+          # (the council's own boundary file is under a restricted Ordnance Survey licence).
+          osmium extract -b -1.96,52.44,-1.84,52.52 work/base.osm.pbf -o work/bham.osm.pbf --overwrite
+          osmium tags-filter work/bham.osm.pbf w/highway -o work/bham-roads.osm.pbf --overwrite
+          osmium export work/bham-roads.osm.pbf -f geojsonseq -o work/bham-roads.geojsonseq --overwrite --geometry-types=linestring
+          python3 scripts/zones.py work/zones.geojsonseq out/charge-zones-uk.json "${official[@]}" \
+            --birmingham-roads work/bham-roads.geojsonseq | tee -a out/build-info.txt
           ls -lh out/charge-zones-uk.json
 
       - name: Businesses, places and streets (Overture + OpenStreetMap + OS Open Names), merged, in squares
