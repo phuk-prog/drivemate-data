@@ -99,9 +99,13 @@ jobs:
       - name: Speed limits (whole UK), in squares
         run: |
           osmium tags-filter work/base.osm.pbf w/maxspeed -o work/maxspeed.osm.pbf --overwrite
-          osmium export work/maxspeed.osm.pbf -f geojsonseq -o work/maxspeed.geojsonseq --overwrite --geometry-types=linestring
-          python3 scripts/limits.py work/maxspeed.geojsonseq out/limits | tee -a out/build-info.txt
+          osmium export work/maxspeed.osm.pbf -f geojsonseq -o work/maxspeed.geojsonseq --overwrite --geometry-types=linestring -u type_id
+          osmium tags-filter work/base.osm.pbf w/highway=motorway -o work/motorways.osm.pbf --overwrite
+          osmium export work/motorways.osm.pbf -f geojsonseq -o work/motorways.geojsonseq --overwrite --geometry-types=linestring -u type_id
+          python3 scripts/limits.py work/maxspeed.geojsonseq out/limits work/motorways.geojsonseq out/limit-checks.md | tee -a out/build-info.txt
           ls out/limits | wc -l; du -sh out/limits
+          # The list of limits that look wrong, on the run's summary page.
+          cat out/limit-checks.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Charge and emission zones (ULEZ, Clean Air Zones, Scottish LEZs)
         run: |
