@@ -4,6 +4,7 @@ name: Build our own map data
 #  - drivemate.pmtiles: the map pictures (the app fetches just the squares it needs)
 #  - lanes-<row>_<col>.json: lane counts and arrows, in half-degree squares (fetched along your route)
 #  - places-<row>_<col>.json.gz: businesses and places from Overture, quarter-degree squares (for search)
+#  - roadinfo-<row>_<col>.json: road warnings and turn landmarks, half-degree squares (fetched along your route)
 on:
   workflow_dispatch:
   schedule:
@@ -100,6 +101,23 @@ jobs:
           python3 scripts/arrows.py work/roads.geojsonseq out/lanes work/mapillary-arrows-cache.json.gz out/mapillary-arrows-cache.json.gz \
             || echo "::warning::Painted arrows step failed; lane files kept as they were"
 
+      - name: Road warnings and turn landmarks (from OpenStreetMap), in squares
+        shell: bash
+        run: |
+          set -o pipefail
+          # Speed bumps, hazard signs, cameras, level crossings, toll booths, schools, traffic lights,
+          # stop signs and well-known named places: on the phone, so they work with no signal.
+          python3 scripts/roadinfo.py --selftest
+          osmium tags-filter work/base.osm.pbf \
+            n/traffic_calming=bump,hump,table,cushion,yes n/hazard n/highway=speed_camera,traffic_signals,stop \
+            n/railway=level_crossing n/barrier=toll_booth w/amenity=school \
+            nwr/amenity=fuel,pub,place_of_worship,fast_food nwr/shop=supermarket \
+            -o work/roadinfo.osm.pbf --overwrite
+          osmium export work/roadinfo.osm.pbf -f geojsonseq -o work/roadinfo.geojsonseq --overwrite \
+            --geometry-types=point,linestring,polygon -a type,id
+          python3 scripts/roadinfo.py work/roadinfo.geojsonseq out/roadinfo | tee -a out/build-info.txt
+          ls out/roadinfo | wc -l; du -sh out/roadinfo
+
       - name: Speed cameras and level crossings (whole UK)
         run: |
           osmium tags-filter work/base.osm.pbf n/highway=speed_camera n/railway=level_crossing r/type=enforcement \
@@ -155,7 +173,7 @@ jobs:
           failed=0
           up out/drivemate.pmtiles || failed=1
           [ -f out/mapillary-arrows-cache.json.gz ] && { up out/mapillary-arrows-cache.json.gz || failed=1; }
-          for f in out/build-info.txt out/cameras-uk.json out/charge-zones-uk.json out/lanes/*.json out/limits/*.json out/places/*.json.gz; do up "$f" || failed=1; done
+          for f in out/build-info.txt out/cameras-uk.json out/charge-zones-uk.json out/lanes/*.json out/limits/*.json out/roadinfo/*.json out/places/*.json.gz; do up "$f" || failed=1; done
           [ $failed = 0 ] || exit 1
           {
             echo "## Map data built"
