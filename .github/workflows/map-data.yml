@@ -161,3 +161,120 @@ jobs:
             echo "## Map data built"
             echo "Map file: $(du -h out/drivemate.pmtiles | cut -f1) · lane squares: $(ls out/lanes | wc -l) ($(du -sh out/lanes | cut -f1)) · place squares: $(ls out/places | wc -l) ($(du -sh out/places | cut -f1))"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Whole-UK road graph for routes worked out on the phone with no signal (Valhalla Mobile 0.6.3
+  # reads Valhalla 3.6.3 graphs). Own release "routing-uk": the pieces of each build are uploaded
+  # first, checked, and only then does routing-uk.json (what phones read) switch to them.
+  routing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      RTAG: routing-uk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make room
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool jq pigz > /dev/null
+          python3 -m venv work/vh
+          work/vh/bin/pip install -q pyvalhalla==3.6.3
+          curl -sSfL -o work/valhalla_build_extract https://raw.githubusercontent.com/valhalla/valhalla/3.6.3/scripts/valhalla_build_extract
+
+      - name: OpenStreetMap base (Geofabrik, whole UK)
+        run: |
+          curl -sSfL -o work/base.osm.pbf "https://download.geofabrik.de/${REGION}-latest.osm.pbf"
+          ls -lh work/base.osm.pbf
+
+      - name: Build the road graph
+        run: |
+          export PATH="$PWD/work/vh/bin:$PATH"
+          # Only roads a car can use (plus ferries and turn bans): footpaths and cycle paths
+          # make the file much bigger and are never used for driving.
+          osmium tags-filter work/base.osm.pbf \
+            w/highway=motorway,trunk,primary,secondary,tertiary,unclassified,residential,service,living_street,road,track,motorway_link,trunk_link,primary_link,secondary_link,tertiary_link \
+            w/route=ferry r/type=restriction -o work/drive.osm.pbf --overwrite
+          ls -lh work/drive.osm.pbf
+          mkdir -p work/tiles
+          python3 work/vh/lib/python3*/site-packages/valhalla/valhalla_build_config.py \
+            --mjolnir-tile-dir "$PWD/work/tiles" --mjolnir-tile-extract "$PWD/work/uk.tar" \
+            --mjolnir-admin "$PWD/work/admin.sqlite" --mjolnir-concurrency "$(nproc)" > work/valhalla.json
+          # Country boundaries from the full file: they set driving side and country rules.
+          valhalla_build_admins -c work/valhalla.json work/base.osm.pbf 2>&1 | tail -n 3
+          rm work/base.osm.pbf
+          valhalla_build_tiles -c work/valhalla.json work/drive.osm.pbf 2>&1 | tail -n 5
+          python3 work/valhalla_build_extract -c work/valhalla.json -v 2>&1 | tail -n 2
+          rm -rf work/tiles work/drive.osm.pbf
+          ls -lh work/uk.tar
+
+      - name: Test journeys across the UK (must all work before publishing)
+        run: |
+          mkdir -p work/empty
+          work/vh/bin/python - <<'PY'
+          import json, math
+          from valhalla import Actor, get_config
+          a = Actor(get_config(tile_extract="work/uk.tar", tile_dir="work/empty", verbose=False))
+          trips = {
+              "Stockport - Liverpool": ((53.4052, -2.1575), (53.4075, -2.9919)),
+              "Stockport - Sheffield": ((53.4052, -2.1575), (53.3781, -1.4697)),
+              "Manchester - Wrexham": ((53.4774, -2.2309), (53.0466, -2.9925)),
+              "Carlisle - Gretna": ((54.8925, -2.9329), (54.9947, -3.0646)),
+              "London - Cardiff": ((51.5074, -0.1278), (51.4816, -3.1791)),
+              "Belfast - Lisburn": ((54.5973, -5.9301), (54.5162, -6.0580)),
+          }
+          bad = 0
+          for name, (s, e) in trips.items():
+              try:
+                  r = json.loads(a.route(json.dumps({"locations": [{"lat": s[0], "lon": s[1]}, {"lat": e[0], "lon": e[1]}], "costing": "auto", "units": "kilometers"})))
+                  km = r["trip"]["summary"]["length"]
+                  crow = 6371 * math.acos(min(1, math.sin(math.radians(s[0])) * math.sin(math.radians(e[0])) + math.cos(math.radians(s[0])) * math.cos(math.radians(e[0])) * math.cos(math.radians(e[1] - s[1]))))
+                  ok = crow <= km <= crow * 2.5
+                  print(f"{'ok ' if ok else 'BAD'} {name}: {km:.1f} km by road ({crow:.1f} km straight)")
+                  bad += not ok
+              except Exception as ex:
+                  print(f"BAD {name}: {ex}")
+                  bad += 1
+          raise SystemExit(1 if bad else 0)
+          PY
+
+      - name: Publish the road graph
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          STAMP="$(date -u +%Y%m%d)-r${GITHUB_RUN_NUMBER}"
+          sha=$(sha256sum work/uk.tar | cut -d' ' -f1)
+          bytes=$(stat -c %s work/uk.tar)
+          pigz -6 -c work/uk.tar > work/uk.tar.gz && rm work/uk.tar
+          # GitHub allows 2 GB per file: split into pieces the phone joins back together.
+          split -b 1900M -d -a 2 work/uk.tar.gz "work/valhalla-uk-$STAMP.tar.gz.part"
+          rm work/uk.tar.gz
+          gh release view "$RTAG" >/dev/null 2>&1 || gh release create "$RTAG" --title "Routing: UK (no-signal routes)" --prerelease \
+            --notes "Road graph for routes worked out on the phone (Valhalla 3.6.3), built weekly from OpenStreetMap (© OpenStreetMap contributors, ODbL). routing-uk.json names the current pieces."
+          up() { for i in 1 2 3 4 5; do gh release upload "$RTAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
+          parts=(work/valhalla-uk-$STAMP.tar.gz.part*)
+          for p in "${parts[@]}"; do up "$p"; done
+          # Check the pieces arrived whole before switching phones over.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RTAG" --jq .id)
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --jq '.[] | select(.state == "uploaded") | "\(.name) \(.size)"' | sort > work/published.txt
+          for p in "${parts[@]}"; do grep -qx "$(basename "$p") $(stat -c %s "$p")" work/published.txt || { echo "::error::piece missing: $p"; exit 1; }; done
+          # Pieces of the build phones use now: kept until next week.
+          prev=$(curl -sfL "https://github.com/$GITHUB_REPOSITORY/releases/download/$RTAG/routing-uk.json" | jq -r '.parts[]?' || true)
+          gz=0; for p in "${parts[@]}"; do gz=$((gz + $(stat -c %s "$p"))); done
+          jq -n --arg sha "$sha" --argjson bytes "$bytes" --argjson gz "$gz" --arg built "$(date -u +%FT%TZ)" \
+            --argjson parts "$(printf '%s\n' "${parts[@]##*/}" | jq -R . | jq -s .)" \
+            '{engine: "valhalla-3.6.3", sha256: $sha, bytes: $bytes, download_bytes: $gz, built: $built, parts: $parts}' > work/routing-uk.json
+          cat work/routing-uk.json
+          up work/routing-uk.json
+          # Remove pieces older than the previous build.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --jq '.[] | "\(.id) \(.name)"' |
+            while read -r aid name; do
+              case "$name" in valhalla-uk-$STAMP.*|routing-uk.json) continue ;; esac
+              echo "$prev" | grep -qx "$name" && continue
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$aid" || true
+            done
+          echo "Road graph for no-signal routes: $((bytes / 1048576)) MB on the phone, $((gz / 1048576)) MB download" >> "$GITHUB_STEP_SUMMARY"

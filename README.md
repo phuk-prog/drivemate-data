@@ -14,6 +14,11 @@ Open map data for the DriveMate navigation app, rebuilt every week by
 | `cameras-uk.json` | Speed / red-light / average-speed cameras and level crossings |
 | `charge-zones-uk.json` | Charge and emission zones (ULEZ, Clean Air Zones, Scottish LEZs) with what each means for a car |
 
+Also, in the separate `routing-uk` release: `routing-uk.json` and `valhalla-uk-<date>.tar.gz.partNN`, the
+whole-UK road graph (Valhalla 3.6.3) for routes worked out on the phone with no signal. The phone
+downloads it on Wi-Fi only when you switch it on in Settings; `routing-uk.json` switches to a new
+build only after its pieces have uploaded and six test journeys across the UK have worked.
+
 Sources and licences:
 - © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/)
 - [Overture Maps](https://overturemaps.org) places (CDLA Permissive 2.0 / ODbL as published)
