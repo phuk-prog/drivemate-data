@@ -88,6 +88,18 @@ jobs:
           python3 scripts/lanes.py work/roads.geojsonseq out/lanes
           ls out/lanes | wc -l; du -sh out/lanes
 
+      - name: Painted lane arrows from street photos (Mapillary), where the map has none
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
+          MAPILLARY_MAX_FETCH: "15000"
+        run: |
+          # Last week's answers, so each week only checks the oldest or new junctions.
+          gh release download "$TAG" -p mapillary-arrows-cache.json.gz -D work --clobber 2>/dev/null || echo "no earlier arrows yet"
+          python3 scripts/arrows.py --selftest
+          python3 scripts/arrows.py work/roads.geojsonseq out/lanes work/mapillary-arrows-cache.json.gz out/mapillary-arrows-cache.json.gz \
+            || echo "::warning::Painted arrows step failed; lane files kept as they were"
+
       - name: Speed cameras and level crossings (whole UK)
         run: |
           osmium tags-filter work/base.osm.pbf n/highway=speed_camera n/railway=level_crossing r/type=enforcement \
@@ -142,6 +154,7 @@ jobs:
           up() { for i in 1 2 3 4 5; do gh release upload "$TAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
           failed=0
           up out/drivemate.pmtiles || failed=1
+          [ -f out/mapillary-arrows-cache.json.gz ] && { up out/mapillary-arrows-cache.json.gz || failed=1; }
           for f in out/build-info.txt out/cameras-uk.json out/charge-zones-uk.json out/lanes/*.json out/limits/*.json out/places/*.json.gz; do up "$f" || failed=1; done
           [ $failed = 0 ] || exit 1
           {
