@@ -10,6 +10,7 @@ Open map data for the DriveMate navigation app, rebuilt every week by
 | `lanes-<row>_<col>.json` | Lane counts and lane arrows, in half-degree squares |
 | `places-<row>_<col>.json.gz` | Businesses, places and streets, merged and de-duplicated, quarter-degree squares |
 | `cameras-uk.json` | Speed / red-light / average-speed cameras and level crossings |
+| `charge-zones-uk.json` | Charge and emission zones (ULEZ, Clean Air Zones, Scottish LEZs) with what each means for a car |
 
 Sources and licences:
 - © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/)

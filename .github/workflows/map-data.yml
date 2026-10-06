@@ -96,6 +96,14 @@ jobs:
           python3 scripts/cameras.py work/cameras.opl out/cameras-uk.json | tee -a out/build-info.txt
           ls -lh out/cameras-uk.json
 
+      - name: Charge and emission zones (ULEZ, Clean Air Zones, Scottish LEZs)
+        run: |
+          osmium tags-filter work/base.osm.pbf r/boundary=low_emission_zone w/boundary=low_emission_zone \
+            -o work/zones.osm.pbf --overwrite
+          osmium export work/zones.osm.pbf -f geojsonseq -o work/zones.geojsonseq --overwrite --geometry-types=polygon
+          python3 scripts/zones.py work/zones.geojsonseq out/charge-zones-uk.json | tee -a out/build-info.txt
+          ls -lh out/charge-zones-uk.json
+
       - name: Businesses, places and streets (Overture + OpenStreetMap + OS Open Names), merged, in squares
         run: |
           pip install -q overturemaps pyarrow pyproj
@@ -123,7 +131,7 @@ jobs:
           up() { for i in 1 2 3 4 5; do gh release upload "$TAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
           failed=0
           up out/drivemate.pmtiles || failed=1
-          for f in out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz; do up "$f" || failed=1; done
+          for f in out/build-info.txt out/cameras-uk.json out/charge-zones-uk.json out/lanes/*.json out/places/*.json.gz; do up "$f" || failed=1; done
           [ $failed = 0 ] || exit 1
           {
             echo "## Map data built"
