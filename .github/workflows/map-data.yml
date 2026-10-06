@@ -96,6 +96,13 @@ jobs:
           python3 scripts/cameras.py work/cameras.opl out/cameras-uk.json | tee -a out/build-info.txt
           ls -lh out/cameras-uk.json
 
+      - name: Speed limits (whole UK), in squares
+        run: |
+          osmium tags-filter work/base.osm.pbf w/maxspeed -o work/maxspeed.osm.pbf --overwrite
+          osmium export work/maxspeed.osm.pbf -f geojsonseq -o work/maxspeed.geojsonseq --overwrite --geometry-types=linestring
+          python3 scripts/limits.py work/maxspeed.geojsonseq out/limits | tee -a out/build-info.txt
+          ls out/limits | wc -l; du -sh out/limits
+
       - name: Charge and emission zones (ULEZ, Clean Air Zones, Scottish LEZs)
         run: |
           osmium tags-filter work/base.osm.pbf r/boundary=low_emission_zone w/boundary=low_emission_zone \
@@ -131,7 +138,7 @@ jobs:
           up() { for i in 1 2 3 4 5; do gh release upload "$TAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
           failed=0
           up out/drivemate.pmtiles || failed=1
-          for f in out/build-info.txt out/cameras-uk.json out/charge-zones-uk.json out/lanes/*.json out/places/*.json.gz; do up "$f" || failed=1; done
+          for f in out/build-info.txt out/cameras-uk.json out/charge-zones-uk.json out/lanes/*.json out/limits/*.json out/places/*.json.gz; do up "$f" || failed=1; done
           [ $failed = 0 ] || exit 1
           {
             echo "## Map data built"
