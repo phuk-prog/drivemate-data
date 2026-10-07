@@ -231,6 +231,11 @@ jobs:
           VEXTRA="map-data-$STAMP-extra"
           echo "Publishing $VMAIN and $VEXTRA"
 
+          # A manual re-run uses the same run number. Remove any partial releases from a failed
+          # attempt; latest.json still points phones at the previous complete build.
+          gh release delete "$VMAIN" --cleanup-tag -y >/dev/null 2>&1 || true
+          gh release delete "$VEXTRA" --cleanup-tag -y >/dev/null 2>&1 || true
+
           gh release create "$VMAIN" --title "Map data: UK $STAMP" --prerelease             --notes "Complete immutable DriveMate map-data build. © OpenStreetMap contributors (ODbL) and other attributed open sources."
           gh release create "$VEXTRA" --title "Map data: UK extras $STAMP" --prerelease             --notes "Complete immutable DriveMate lanes, limits, warnings, zones and offline-search build."
 
