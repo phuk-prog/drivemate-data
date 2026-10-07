@@ -12,6 +12,9 @@ KEEP = [
     "turn:lanes", "turn:lanes:forward", "turn:lanes:backward",
     "oneway", "junction", "maxspeed", "ref", "name", "highway",
     "destination", "destination:ref", "destination:lanes",
+    # Bus lanes, so the app can mark them and never advise them.
+    "bus:lanes", "bus:lanes:forward", "bus:lanes:backward",
+    "psv:lanes", "psv:lanes:forward", "psv:lanes:backward",
 ]
 
 src, dst = sys.argv[1], sys.argv[2]

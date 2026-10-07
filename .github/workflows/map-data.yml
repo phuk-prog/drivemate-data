@@ -4,6 +4,8 @@ name: Build our own map data
 #  - drivemate.pmtiles: the map pictures (the app fetches just the squares it needs)
 #  - lanes-<row>_<col>.json: lane counts and arrows, in half-degree squares (fetched along your route)
 #  - places-<row>_<col>.json.gz: businesses and places from Overture, quarter-degree squares (for search)
+#  - roadinfo-<row>_<col>.json: road warnings and turn landmarks, half-degree squares (fetched along your route)
+#  - search-offline-uk.tsv.gz: every GB postcode, street and named place, for search with no signal
 on:
   workflow_dispatch:
   schedule:
@@ -22,6 +24,7 @@ concurrency:
 env:
   REGION: europe/united-kingdom
   TAG: map-data-uk
+  XTAG: map-data-uk-extra
 
 jobs:
   build:
@@ -88,6 +91,35 @@ jobs:
           python3 scripts/lanes.py work/roads.geojsonseq out/lanes
           ls out/lanes | wc -l; du -sh out/lanes
 
+      - name: Painted lane arrows from street photos (Mapillary), where the map has none
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
+          MAPILLARY_MAX_FETCH: "15000"
+        run: |
+          # Last week's answers, so each week only checks the oldest or new junctions.
+          gh release download "$XTAG" -p mapillary-arrows-cache.json.gz -D work --clobber 2>/dev/null || gh release download "$TAG" -p mapillary-arrows-cache.json.gz -D work --clobber 2>/dev/null || echo "no earlier arrows yet"
+          python3 scripts/arrows.py --selftest
+          python3 scripts/arrows.py work/roads.geojsonseq out/lanes work/mapillary-arrows-cache.json.gz out/mapillary-arrows-cache.json.gz \
+            || echo "::warning::Painted arrows step failed; lane files kept as they were"
+
+      - name: Road warnings and turn landmarks (from OpenStreetMap), in squares
+        shell: bash
+        run: |
+          set -o pipefail
+          # Speed bumps, hazard signs, cameras, level crossings, toll booths, schools, traffic lights,
+          # stop signs and well-known named places: on the phone, so they work with no signal.
+          python3 scripts/roadinfo.py --selftest
+          osmium tags-filter work/base.osm.pbf \
+            n/traffic_calming=bump,hump,table,cushion,yes n/hazard n/highway=speed_camera,traffic_signals,stop \
+            n/railway=level_crossing n/barrier=toll_booth w/amenity=school \
+            nwr/amenity=fuel,pub,place_of_worship,fast_food nwr/shop=supermarket \
+            -o work/roadinfo.osm.pbf --overwrite
+          osmium export work/roadinfo.osm.pbf -f geojsonseq -o work/roadinfo.geojsonseq --overwrite \
+            --geometry-types=point,linestring,polygon -a type,id
+          python3 scripts/roadinfo.py work/roadinfo.geojsonseq out/roadinfo | tee -a out/build-info.txt
+          ls out/roadinfo | wc -l; du -sh out/roadinfo
+
       - name: Speed cameras and level crossings (whole UK)
         run: |
           osmium tags-filter work/base.osm.pbf n/highway=speed_camera n/railway=level_crossing r/type=enforcement \
@@ -95,6 +127,61 @@ jobs:
           osmium cat work/cameras.osm.pbf -f opl,add_metadata=false -o work/cameras.opl --overwrite
           python3 scripts/cameras.py work/cameras.opl out/cameras-uk.json | tee -a out/build-info.txt
           ls -lh out/cameras-uk.json
+
+      - name: Speed limits (whole UK, OpenStreetMap + street-photo signs where it has none), in squares
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
+          MAPILLARY_SIGNS_MAX_FETCH: "4000"
+        run: |
+          set -o pipefail
+          python3 scripts/limits.py --selftest
+          osmium tags-filter work/base.osm.pbf w/maxspeed -o work/maxspeed.osm.pbf --overwrite
+          osmium export work/maxspeed.osm.pbf -f geojsonseq -o work/maxspeed.geojsonseq --overwrite --geometry-types=linestring -u type_id
+          osmium tags-filter work/base.osm.pbf w/highway=motorway -o work/motorways.osm.pbf --overwrite
+          osmium export work/motorways.osm.pbf -f geojsonseq -o work/motorways.geojsonseq --overwrite --geometry-types=linestring -u type_id
+          # Speed-limit signs found in Mapillary photos in earlier weeks (only old or new areas are asked again).
+          gh release download "$XTAG" -p mapillary-signs-cache.json.gz -D work --clobber 2>/dev/null || echo "no earlier signs yet"
+          python3 scripts/limits.py work/maxspeed.geojsonseq out/limits work/motorways.geojsonseq out/limit-checks.md \
+            --roads work/roads.geojsonseq --signs-cache-in work/mapillary-signs-cache.json.gz \
+            --signs-cache-out out/mapillary-signs-cache.json.gz | tee -a out/build-info.txt
+          ls out/limits | wc -l; du -sh out/limits
+          # The list of limits that look wrong, on the run's summary page.
+          cat out/limit-checks.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Charge and emission zones (Congestion Charge, ULEZ, Clean Air Zones, Scottish LEZs)
+        shell: bash
+        run: |
+          set -o pipefail
+          pip install -q pyproj shapely
+          python3 scripts/zones.py --selftest
+          osmium tags-filter work/base.osm.pbf r/boundary=low_emission_zone w/boundary=low_emission_zone \
+            -o work/zones.osm.pbf --overwrite
+          osmium export work/zones.osm.pbf -f geojsonseq -o work/zones.geojsonseq --overwrite --geometry-types=polygon
+          # Official London boundaries (Transport for London on the London Datastore, Open Government
+          # Licence v2). If the direct link has moved, ask the Datastore for the dataset's current file.
+          # A failed download only means OpenStreetMap's zone (if any) is used: a warning, not a failure.
+          london() {  # dataset id, direct link, output file
+            curl -sSfL --retry 3 -m 180 -o "$3" "$2" && return 0
+            url=$(curl -sSf -m 60 "https://data.london.gov.uk/api/action/package_show?id=$1" |
+              jq -r '[.result.resources[] | select((.url // "") | test("\\.geojson$"; "i")) | .url][0] // empty') &&
+              [ -n "$url" ] && curl -sSfL --retry 3 -m 180 -o "$3" "$url" && return 0
+            echo "::warning::Could not download $3 from the London Datastore"; rm -f "$3"; return 1
+          }
+          official=()
+          london v8onw "https://data.london.gov.uk/download/v8onw/936d71d8-c5fc-40ad-a392-6bec86413b48/CentralUltraLowEmissionZone.geojson" \
+            work/london-ccz.geojson && official+=(--official "London Congestion Charge=work/london-ccz.geojson")
+          london vd455 "https://data.london.gov.uk/download/vd455/0cab9a8b-ca8a-47b0-aaf8-0e77a9041a19/LondonWideUltraLowEmissionZone.geojson" \
+            work/london-ulez.geojson && official+=(--official "London ULEZ=work/london-ulez.geojson")
+          # Birmingham's Clean Air Zone = inside the A4540 Middleway: traced from OpenStreetMap roads
+          # (the council's own boundary file is under a restricted Ordnance Survey licence).
+          osmium extract -b -1.96,52.44,-1.84,52.52 work/base.osm.pbf -o work/bham.osm.pbf --overwrite
+          osmium tags-filter work/bham.osm.pbf w/highway -o work/bham-roads.osm.pbf --overwrite
+          osmium export work/bham-roads.osm.pbf -f geojsonseq -o work/bham-roads.geojsonseq --overwrite --geometry-types=linestring
+          python3 scripts/zones.py work/zones.geojsonseq out/charge-zones-uk.json "${official[@]}" \
+            --birmingham-roads work/bham-roads.geojsonseq | tee -a out/build-info.txt
+          ls -lh out/charge-zones-uk.json
 
       - name: Businesses, places and streets (Overture + OpenStreetMap + OS Open Names), merged, in squares
         run: |
@@ -113,19 +200,218 @@ jobs:
           python3 scripts/places.py out/places --overture work/places.parquet --osm work/pois.geojsonseq --osnames work/osnames
           ls out/places | wc -l; du -sh out/places
 
-      - name: Publish the map files
+      - name: Offline postcode and place search (OS Open Names), one file for the phone
+        run: |
+          python3 scripts/search_offline.py --selftest
+          # No OS Open Names this week (download failed above): keep last week's file in the release.
+          if [ -z "$(find work/osnames -name '*.csv' 2>/dev/null | head -1)" ]; then
+            echo "::warning::No OS Open Names: offline search file not rebuilt this week"; exit 0
+          fi
+          python3 scripts/search_offline.py work/osnames out/search-offline-uk.tsv.gz | tee -a out/build-info.txt
+          ls -lh out/search-offline-uk.tsv.gz
+          echo "Offline search: $(du -h out/search-offline-uk.tsv.gz | cut -f1) ($(zcat out/search-offline-uk.tsv.gz | wc -l) lines)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Whole-build data quality gate
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Map data: UK" \
-            --notes "DriveMate's own map files, rebuilt weekly from OpenStreetMap (© OpenStreetMap contributors, ODbL)." --prerelease
-          # One file at a time, each retried: big batches of uploads can be cut off part-way.
-          up() { for i in 1 2 3 4 5; do gh release upload "$TAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
+          # Compare with the previous published build when its quality summary exists.
+          gh release download "$TAG" -p build-quality.json -D work --clobber 2>/dev/null || true
+          python3 scripts/validate_build.py out work/build-quality.json out/build-quality.json
+          cat out/build-quality.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the map files atomically
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Every build gets immutable release tags. Phones switch to them only after every
+          # upload succeeds, by replacing the tiny latest.json pointer on the control release.
+          STAMP="$(date -u +%Y%m%d)-r${GITHUB_RUN_NUMBER}"
+          VMAIN="map-data-$STAMP"
+          VEXTRA="map-data-$STAMP-extra"
+          echo "Publishing $VMAIN and $VEXTRA"
+
+          # A manual re-run uses the same run number. Remove any partial releases from a failed
+          # attempt; latest.json still points phones at the previous complete build.
+          gh release delete "$VMAIN" --cleanup-tag -y >/dev/null 2>&1 || true
+          gh release delete "$VEXTRA" --cleanup-tag -y >/dev/null 2>&1 || true
+
+          gh release create "$VMAIN" --title "Map data: UK $STAMP" --prerelease             --notes "Complete immutable DriveMate map-data build. © OpenStreetMap contributors (ODbL) and other attributed open sources."
+          gh release create "$VEXTRA" --title "Map data: UK extras $STAMP" --prerelease             --notes "Complete immutable DriveMate lanes, limits, warnings, zones and offline-search build."
+
+          up() {
+            tag="$1"; file="$2"
+            for i in 1 2 3 4 5; do
+              gh release upload "$tag" "$file" --clobber && return 0
+              sleep $((i * 20))
+            done
+            echo "::error::upload failed: $tag / $file"
+            return 1
+          }
+
           failed=0
-          up out/drivemate.pmtiles || failed=1
-          for f in out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz; do up "$f" || failed=1; done
+          up "$VMAIN" out/drivemate.pmtiles || failed=1
+          for f in out/build-info.txt out/build-quality.json out/cameras-uk.json out/places/*.json.gz; do
+            up "$VMAIN" "$f" || failed=1
+          done
+
+          for f in out/mapillary-arrows-cache.json.gz out/mapillary-signs-cache.json.gz out/search-offline-uk.tsv.gz; do
+            [ -f "$f" ] && { up "$VEXTRA" "$f" || failed=1; }
+          done
+          for f in out/charge-zones-uk.json out/lanes/*.json out/limits/*.json out/roadinfo/*.json; do
+            up "$VEXTRA" "$f" || failed=1
+          done
           [ $failed = 0 ] || exit 1
+
+          # Sanity-check the releases contain roughly what we uploaded before any phone sees them.
+          main_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$VMAIN" --jq .id)
+          extra_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$VEXTRA" --jq .id)
+          main_n=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$main_id/assets?per_page=100" --jq '.[].id' | wc -l)
+          extra_n=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$extra_id/assets?per_page=100" --jq '.[].id' | wc -l)
+          expected_main=$((4 + $(find out/places -name '*.json.gz' | wc -l)))
+          expected_extra=$(find out/lanes out/limits out/roadinfo -name '*.json' | wc -l)
+          expected_extra=$((expected_extra + 1))
+          [ -f out/search-offline-uk.tsv.gz ] && expected_extra=$((expected_extra + 1))
+          [ -f out/mapillary-arrows-cache.json.gz ] && expected_extra=$((expected_extra + 1))
+          [ -f out/mapillary-signs-cache.json.gz ] && expected_extra=$((expected_extra + 1))
+          [ "$main_n" -ge "$expected_main" ] || { echo "::error::main release incomplete ($main_n/$expected_main)"; exit 1; }
+          [ "$extra_n" -ge "$expected_extra" ] || { echo "::error::extra release incomplete ($extra_n/$expected_extra)"; exit 1; }
+
+          jq -n             --arg tag "$VMAIN"             --arg extra "$VEXTRA"             --arg built "$(date -u +%FT%TZ)"             --slurpfile quality out/build-quality.json             '{version: 2, tag: $tag, extra_tag: $extra, built: $built, quality: $quality[0].metrics}' > out/latest.json
+
+          # The stable tag is now only the compatibility/control release. Updating latest.json is
+          # the atomic switch. Existing older DriveMate versions can keep using their last stable data.
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Map data: UK pointer" --prerelease             --notes "Compatibility release and pointer to the newest complete immutable DriveMate map-data build."
+          up "$TAG" out/latest.json
+          up "$TAG" out/build-quality.json
+
           {
-            echo "## Map data built"
-            echo "Map file: $(du -h out/drivemate.pmtiles | cut -f1) · lane squares: $(ls out/lanes | wc -l) ($(du -sh out/lanes | cut -f1)) · place squares: $(ls out/places | wc -l) ($(du -sh out/places | cut -f1))"
+            echo "## Map data built and published atomically"
+            echo "Main: **$VMAIN** ($main_n assets)"
+            echo "Extras: **$VEXTRA** ($extra_n assets)"
+            echo "Phones switched only after both releases were complete."
           } >> "$GITHUB_STEP_SUMMARY"
+
+          # Keep this build and the previous complete build for instant rollback; delete older
+          # immutable map releases so storage does not grow forever.
+          gh release list --limit 100 --json tagName,createdAt --jq             '[.[] | select(.tagName | test("^map-data-[0-9]{8}-r[0-9]+(-extra)?$"))] | sort_by(.createdAt) | reverse | .[4:] | .[].tagName' |
+          while read -r old; do
+            [ -n "$old" ] && gh release delete "$old" --cleanup-tag -y || true
+          done
+
+  # Whole-UK road graph for routes worked out on the phone with no signal (Valhalla Mobile 0.6.3
+  # reads Valhalla 3.6.3 graphs). Own release "routing-uk": the pieces of each build are uploaded
+  # first, checked, and only then does routing-uk.json (what phones read) switch to them.
+  routing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      RTAG: routing-uk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make room
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool jq pigz > /dev/null
+          python3 -m venv work/vh
+          work/vh/bin/pip install -q pyvalhalla==3.6.3
+          curl -sSfL -o work/valhalla_build_extract https://raw.githubusercontent.com/valhalla/valhalla/3.6.3/scripts/valhalla_build_extract
+
+      - name: OpenStreetMap base (Geofabrik, whole UK)
+        run: |
+          curl -sSfL -o work/base.osm.pbf "https://download.geofabrik.de/${REGION}-latest.osm.pbf"
+          ls -lh work/base.osm.pbf
+
+      - name: Build the road graph
+        run: |
+          export PATH="$PWD/work/vh/bin:$PATH"
+          # Only roads a car can use (plus ferries and turn bans): footpaths and cycle paths
+          # make the file much bigger and are never used for driving.
+          osmium tags-filter work/base.osm.pbf \
+            w/highway=motorway,trunk,primary,secondary,tertiary,unclassified,residential,service,living_street,road,track,motorway_link,trunk_link,primary_link,secondary_link,tertiary_link \
+            w/route=ferry r/type=restriction -o work/drive.osm.pbf --overwrite
+          ls -lh work/drive.osm.pbf
+          mkdir -p work/tiles
+          python3 work/vh/lib/python3*/site-packages/valhalla/valhalla_build_config.py \
+            --mjolnir-tile-dir "$PWD/work/tiles" --mjolnir-tile-extract "$PWD/work/uk.tar" \
+            --mjolnir-admin "$PWD/work/admin.sqlite" --mjolnir-concurrency "$(nproc)" > work/valhalla.json
+          # Country boundaries from the full file: they set driving side and country rules.
+          valhalla_build_admins -c work/valhalla.json work/base.osm.pbf 2>&1 | tail -n 3
+          rm work/base.osm.pbf
+          valhalla_build_tiles -c work/valhalla.json work/drive.osm.pbf 2>&1 | tail -n 5
+          python3 work/valhalla_build_extract -c work/valhalla.json -v 2>&1 | tail -n 2
+          rm -rf work/tiles work/drive.osm.pbf
+          ls -lh work/uk.tar
+
+      - name: Test journeys across the UK (must all work before publishing)
+        run: |
+          mkdir -p work/empty
+          work/vh/bin/python - <<'PY'
+          import json, math
+          from valhalla import Actor, get_config
+          a = Actor(get_config(tile_extract="work/uk.tar", tile_dir="work/empty", verbose=False))
+          trips = {
+              "Stockport - Liverpool": ((53.4052, -2.1575), (53.4075, -2.9919)),
+              "Stockport - Sheffield": ((53.4052, -2.1575), (53.3781, -1.4697)),
+              "Manchester - Wrexham": ((53.4774, -2.2309), (53.0466, -2.9925)),
+              "Carlisle - Gretna": ((54.8925, -2.9329), (54.9947, -3.0646)),
+              "London - Cardiff": ((51.5074, -0.1278), (51.4816, -3.1791)),
+              "Belfast - Lisburn": ((54.5973, -5.9301), (54.5162, -6.0580)),
+          }
+          bad = 0
+          for name, (s, e) in trips.items():
+              try:
+                  r = json.loads(a.route(json.dumps({"locations": [{"lat": s[0], "lon": s[1]}, {"lat": e[0], "lon": e[1]}], "costing": "auto", "units": "kilometers"})))
+                  km = r["trip"]["summary"]["length"]
+                  crow = 6371 * math.acos(min(1, math.sin(math.radians(s[0])) * math.sin(math.radians(e[0])) + math.cos(math.radians(s[0])) * math.cos(math.radians(e[0])) * math.cos(math.radians(e[1] - s[1]))))
+                  ok = crow <= km <= crow * 2.5
+                  print(f"{'ok ' if ok else 'BAD'} {name}: {km:.1f} km by road ({crow:.1f} km straight)")
+                  bad += not ok
+              except Exception as ex:
+                  print(f"BAD {name}: {ex}")
+                  bad += 1
+          raise SystemExit(1 if bad else 0)
+          PY
+
+      - name: Publish the road graph
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          STAMP="$(date -u +%Y%m%d)-r${GITHUB_RUN_NUMBER}"
+          sha=$(sha256sum work/uk.tar | cut -d' ' -f1)
+          bytes=$(stat -c %s work/uk.tar)
+          pigz -6 -c work/uk.tar > work/uk.tar.gz && rm work/uk.tar
+          # GitHub allows 2 GB per file: split into pieces the phone joins back together.
+          split -b 1900M -d -a 2 work/uk.tar.gz "work/valhalla-uk-$STAMP.tar.gz.part"
+          rm work/uk.tar.gz
+          gh release view "$RTAG" >/dev/null 2>&1 || gh release create "$RTAG" --title "Routing: UK (no-signal routes)" --prerelease \
+            --notes "Road graph for routes worked out on the phone (Valhalla 3.6.3), built weekly from OpenStreetMap (© OpenStreetMap contributors, ODbL). routing-uk.json names the current pieces."
+          up() { for i in 1 2 3 4 5; do gh release upload "$RTAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
+          parts=(work/valhalla-uk-$STAMP.tar.gz.part*)
+          for p in "${parts[@]}"; do up "$p"; done
+          # Check the pieces arrived whole before switching phones over.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RTAG" --jq .id)
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --jq '.[] | select(.state == "uploaded") | "\(.name) \(.size)"' | sort > work/published.txt
+          for p in "${parts[@]}"; do grep -qx "$(basename "$p") $(stat -c %s "$p")" work/published.txt || { echo "::error::piece missing: $p"; exit 1; }; done
+          # Pieces of the build phones use now: kept until next week.
+          prev=$(curl -sfL "https://github.com/$GITHUB_REPOSITORY/releases/download/$RTAG/routing-uk.json" | jq -r '.parts[]?' || true)
+          gz=0; for p in "${parts[@]}"; do gz=$((gz + $(stat -c %s "$p"))); done
+          jq -n --arg sha "$sha" --argjson bytes "$bytes" --argjson gz "$gz" --arg built "$(date -u +%FT%TZ)" \
+            --argjson parts "$(printf '%s\n' "${parts[@]##*/}" | jq -R . | jq -s .)" \
+            '{engine: "valhalla-3.6.3", sha256: $sha, bytes: $bytes, download_bytes: $gz, built: $built, parts: $parts}' > work/routing-uk.json
+          cat work/routing-uk.json
+          up work/routing-uk.json
+          # Remove pieces older than the previous build.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --jq '.[] | "\(.id) \(.name)"' |
+            while read -r aid name; do
+              case "$name" in valhalla-uk-$STAMP.*|routing-uk.json) continue ;; esac
+              echo "$prev" | grep -qx "$name" && continue
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$aid" || true
+            done
+          echo "Road graph for no-signal routes: $((bytes / 1048576)) MB on the phone, $((gz / 1048576)) MB download" >> "$GITHUB_STEP_SUMMARY"
