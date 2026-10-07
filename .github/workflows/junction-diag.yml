@@ -1,0 +1,48 @@
+name: Junction lane diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/junction-diag.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download current DriveMate lane square
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download map-data-uk -p lanes-106_-5.json --repo phuk-prog/drivemate-data
+      - name: Print lane data around Albert Road / Cheadle Road
+        run: |
+          python3 - <<'PY'
+          import json, math
+          data=json.load(open("lanes-106_-5.json"))
+          target=(53.3767,-2.1938)
+          def dist(lat,lon):
+              dy=(lat-target[0])*111000
+              dx=(lon-target[1])*111000*math.cos(math.radians(target[0]))
+              return math.hypot(dx,dy)
+          rows=[]
+          for w in data.get("ways",[]):
+              t=w.get("t",{})
+              if t.get("name") not in {"Cheadle Road","Albert Road","Turves Road","Hulme Hall Road"}:
+                  continue
+              g=w.get("g",[])
+              ds=[dist(c[1],c[0]) for c in g if len(c)>=2]
+              if not ds or min(ds)>700:
+                  continue
+              rows.append((min(ds),w.get("id"),t,g))
+          rows.sort()
+          print("TARGET",target,"MATCHES",len(rows))
+          for d,wid,t,g in rows:
+              print("\n---")
+              print("distance_m",round(d,1),"id",wid)
+              print("tags",json.dumps(t,sort_keys=True))
+              print("geometry",json.dumps(g))
+          PY
