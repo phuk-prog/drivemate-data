@@ -14,35 +14,46 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Download current DriveMate lane square
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download map-data-uk -p lanes-106_-5.json --repo phuk-prog/drivemate-data
-      - name: Print lane data around Albert Road / Cheadle Road
+      - name: Query current OpenStreetMap road data for the whole junction area
+        run: |
+          cat > /tmp/q.overpass <<'Q'
+          [out:json][timeout:60];
+          way(53.370,-2.210,53.385,-2.180)
+            ["name"~"^(Cheadle Road|Albert Road|Turves Road|Hulme Hall Road)$"];
+          out tags geom;
+          Q
+          for host in https://overpass-api.de/api/interpreter https://overpass.kumi.systems/api/interpreter; do
+            if curl -fsS --retry 2 --data-urlencode data@/tmp/q.overpass "$host" -o /tmp/osm.json; then break; fi
+          done
+          test -s /tmp/osm.json
+      - name: Print exact tagged segments and identify the shared junction
         run: |
           python3 - <<'PY'
           import json, math
-          data=json.load(open("lanes-106_-5.json"))
-          target=(53.3767,-2.1938)
-          def dist(lat,lon):
-              dy=(lat-target[0])*111000
-              dx=(lon-target[1])*111000*math.cos(math.radians(target[0]))
-              return math.hypot(dx,dy)
-          rows=[]
-          for w in data.get("ways",[]):
-              t=w.get("t",{})
-              if t.get("name") not in {"Cheadle Road","Albert Road","Turves Road","Hulme Hall Road"}:
-                  continue
-              g=w.get("g",[])
-              ds=[dist(c[1],c[0]) for c in g if len(c)>=2]
-              if not ds or min(ds)>700:
-                  continue
-              rows.append((min(ds),w.get("id"),t,g))
-          rows.sort()
-          print("TARGET",target,"MATCHES",len(rows))
-          for d,wid,t,g in rows:
-              print("\n---")
-              print("distance_m",round(d,1),"id",wid)
-              print("tags",json.dumps(t,sort_keys=True))
-              print("geometry",json.dumps(g))
+          d=json.load(open('/tmp/osm.json'))
+          roads={"Cheadle Road","Albert Road","Turves Road","Hulme Hall Road"}
+          els=[e for e in d.get("elements",[]) if e.get("tags",{}).get("name") in roads]
+          # Nodes used by multiple named road ways identify the physical junction.
+          bypt={}
+          for e in els:
+              name=e["tags"]["name"]
+              for p in e.get("geometry",[]):
+                  key=(round(p["lat"],7),round(p["lon"],7))
+                  bypt.setdefault(key,set()).add(name)
+          junctions=[(p,n) for p,n in bypt.items() if len(n)>=2]
+          print("SHARED NODES")
+          for p,n in sorted(junctions,key=lambda x:-len(x[1])):
+              print(p,sorted(n))
+          print("\nSEGMENTS")
+          for e in sorted(els,key=lambda e:(e["tags"]["name"],e["id"])):
+              t=e["tags"]
+              g=e.get("geometry",[])
+              if not g: continue
+              # Only print segments near the four-way junction cluster, broad enough to include approaches.
+              near=min((p["lat"]-53.377)**2+(p["lon"]+2.1935)**2 for p in g)
+              if near > 0.00012: continue
+              keys=["highway","name","ref","lanes","lanes:forward","lanes:backward","turn:lanes","turn:lanes:forward","turn:lanes:backward","oneway","junction","access","bus:lanes","psv:lanes"]
+              print("\nway",e["id"])
+              print({k:t[k] for k in keys if k in t})
+              print("from",g[0],"to",g[-1],"points",len(g))
           PY
