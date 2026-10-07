@@ -263,7 +263,7 @@ jobs:
           extra_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$VEXTRA" --jq .id)
           main_n=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$main_id/assets?per_page=100" --jq '.[].id' | wc -l)
           extra_n=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$extra_id/assets?per_page=100" --jq '.[].id' | wc -l)
-          expected_main=$((3 + $(find out/places -name '*.json.gz' | wc -l)))
+          expected_main=$((4 + $(find out/places -name '*.json.gz' | wc -l)))
           expected_extra=$(find out/lanes out/limits out/roadinfo -name '*.json' | wc -l)
           expected_extra=$((expected_extra + 1))
           [ -f out/search-offline-uk.tsv.gz ] && expected_extra=$((expected_extra + 1))
@@ -289,7 +289,7 @@ jobs:
 
           # Keep this build and the previous complete build for instant rollback; delete older
           # immutable map releases so storage does not grow forever.
-          gh release list --limit 100 --json tagName,createdAt --jq             '[.[] | select(.tagName | test("^map-data-map-data-[0-9]{8}-r[0-9]+(-extra)?$"))] | sort_by(.createdAt) | reverse | .[4:] | .[].tagName' |
+          gh release list --limit 100 --json tagName,createdAt --jq             '[.[] | select(.tagName | test("^map-data-[0-9]{8}-r[0-9]+(-extra)?$"))] | sort_by(.createdAt) | reverse | .[4:] | .[].tagName' |
           while read -r old; do
             [ -n "$old" ] && gh release delete "$old" --cleanup-tag -y || true
           done
