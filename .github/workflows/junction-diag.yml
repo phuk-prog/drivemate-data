@@ -13,71 +13,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - uses: actions/checkout@v4
-      - name: Download live OpenStreetMap data around the junction
+      - name: Query open KartaView street imagery around exact junction
         run: |
-          curl -fsSL --max-time 30 --retry 2             'https://api.openstreetmap.org/api/0.6/map?bbox=-2.1960,53.3745,-2.1910,53.3790'             -o /tmp/map.osm
-          test -s /tmp/map.osm
-      - name: Print exact lane tags on all four approaches
-        run: |
+          curl -fsSL --max-time 30 -X POST 'https://api.openstreetcam.org/1.0/list/nearby-photos/'             -d 'lat=53.376408' -d 'lng=-2.1940477' -d 'radius=300' -d 'ipp=50' -d 'page=1'             -o /tmp/kv.json
           python3 - <<'PY'
-          import xml.etree.ElementTree as ET, math
-          root=ET.parse('/tmp/map.osm').getroot()
-          nodeels={n.attrib['id']:n for n in root.findall('node')}
-          nodes={nid:(float(n.attrib['lat']),float(n.attrib['lon'])) for nid,n in nodeels.items()}
-          wanted={"Cheadle Road","Albert Road","Turves Road","Hulme Hall Road"}
-          ways=[]
-          for w in root.findall('way'):
-              tags={t.attrib['k']:t.attrib['v'] for t in w.findall('tag')}
-              if tags.get('name') not in wanted: continue
-              refs=[n.attrib['ref'] for n in w.findall('nd') if n.attrib['ref'] in nodes]
-              geom=[nodes[r] for r in refs]
-              ways.append((w.attrib['id'],tags,refs,geom))
-          usage={}
-          for wid,t,refs,g in ways:
-              for r in refs: usage.setdefault(r,set()).add(t['name'])
-          print('SHARED JUNCTION NODES')
-          shared=[]
-          for nid,names in usage.items():
-              if len(names)>=2:
-                  shared.append((nid,nodes[nid],sorted(names)))
-          for x in shared: print(x)
-          print('\nJUNCTION NODE TAGS')
-          for nid,p,names in shared:
-              nt={t.attrib['k']:t.attrib['v'] for t in nodeels[nid].findall('tag')}
-              print(nid,p,nt)
-          relevant_way_ids={wid for wid,t,refs,g in ways}
-          print('\nTURN RESTRICTIONS INVOLVING THESE ROADS')
-          found=0
-          for rel in root.findall('relation'):
-              tags={t.attrib['k']:t.attrib['v'] for t in rel.findall('tag')}
-              if tags.get('type')!='restriction': continue
-              members=[(m.attrib.get('type'),m.attrib.get('ref'),m.attrib.get('role')) for m in rel.findall('member')]
-              if not any(ref in relevant_way_ids for typ,ref,role in members if typ=='way'): continue
-              found+=1
-              print(rel.attrib['id'],tags,members)
-          if not found: print('NONE')
-          # Junction centre from shared nodes; print every named road segment within 250 m.
-          if shared:
-              lat=sum(x[1][0] for x in shared)/len(shared); lon=sum(x[1][1] for x in shared)/len(shared)
-          else:
-              lat,lon=53.3767,-2.1938
-          print('CENTRE',lat,lon)
-          def d(p):
-              dy=(p[0]-lat)*111000
-              dx=(p[1]-lon)*111000*math.cos(math.radians(lat))
-              return math.hypot(dx,dy)
-          lane_keys=[
-            'highway','name','ref','lanes','lanes:forward','lanes:backward',
-            'turn:lanes','turn:lanes:forward','turn:lanes:backward',
-            'oneway','junction','bus:lanes','bus:lanes:forward','bus:lanes:backward',
-            'psv:lanes','psv:lanes:forward','psv:lanes:backward','access'
-          ]
-          print('\nNEARBY SEGMENTS')
-          for wid,t,refs,g in sorted(ways,key=lambda x:(x[1]['name'],int(x[0]))):
-              if not g or min(map(d,g))>300: continue
-              print('\nway',wid,'min_m',round(min(map(d,g)),1))
-              print({k:t[k] for k in lane_keys if k in t})
-              print('nodes',refs)
-              print('geom',g)
+          import json, math
+          d=json.load(open('/tmp/kv.json'))
+          print('STATUS', d.get('status'))
+          # Different API versions wrap the list differently.
+          candidates=[]
+          def walk(x):
+              if isinstance(x,dict):
+                  if {'lat','lng','id'} <= set(x) and ('name' in x or 'lth_name' in x or 'th_name' in x):
+                      candidates.append(x)
+                  for v in x.values(): walk(v)
+              elif isinstance(x,list):
+                  for v in x: walk(v)
+          walk(d)
+          seen=set()
+          print('PHOTOS',len(candidates))
+          for p in candidates:
+              pid=str(p.get('id'))
+              if pid in seen: continue
+              seen.add(pid)
+              print(json.dumps({
+                'id':p.get('id'),'sequence_id':p.get('sequence_id'),'lat':p.get('lat'),'lng':p.get('lng'),
+                'heading':p.get('heading'),'date_added':p.get('date_added'),
+                'name':p.get('name'),'lth_name':p.get('lth_name'),'th_name':p.get('th_name'),
+                'way_id':p.get('way_id')
+              },sort_keys=True))
+              if len(seen)>=20: break
           PY
