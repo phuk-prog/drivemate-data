@@ -211,6 +211,15 @@ jobs:
           ls -lh out/search-offline-uk.tsv.gz
           echo "Offline search: $(du -h out/search-offline-uk.tsv.gz | cut -f1) ($(zcat out/search-offline-uk.tsv.gz | wc -l) lines)" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Whole-build data quality gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Compare with the previous published build when its quality summary exists.
+          gh release download "$TAG" -p build-quality.json -D work --clobber 2>/dev/null || true
+          python3 scripts/validate_build.py out work/build-quality.json out/build-quality.json
+          cat out/build-quality.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish the map files
         env:
           GH_TOKEN: ${{ github.token }}
@@ -221,7 +230,7 @@ jobs:
           up() { for i in 1 2 3 4 5; do gh release upload "$TAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
           failed=0
           up out/drivemate.pmtiles || failed=1
-          for f in out/build-info.txt out/cameras-uk.json out/places/*.json.gz; do up "$f" || failed=1; done
+          for f in out/build-info.txt out/build-quality.json out/cameras-uk.json out/places/*.json.gz; do up "$f" || failed=1; done
           # GitHub allows 1000 files per release and the one above is nearly full (780 place
           # squares), so lanes, limits, road warnings, zones, search and the lookup caches go in
           # their own release, map-data-uk-extra (the app reads them from there).
