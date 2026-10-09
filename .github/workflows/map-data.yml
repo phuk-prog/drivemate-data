@@ -123,16 +123,16 @@ jobs:
               --report "work/topology/${area}-report.json" --minimum-ways 100
             # No publication or automatic topology edits: diagnostics are not ground truth.
             python3 - "work/topology/${area}-report.json" >> "$GITHUB_STEP_SUMMARY" <<'PY'
-import json, sys
-from pathlib import Path
-report = json.loads(Path(sys.argv[1]).read_text())
-print(f"### Road connectivity diagnostic: {report['region']}")
-print(f"- Road ways examined: {report['road_ways']:,}")
-print(f"- Node-sharing components: {report['components']:,}")
-print(f"- Major-road endpoint candidates: {report['possible_major_road_ends']:,} (not proven errors)")
-print(f"- Potential level-conflict examples: {report['potential_level_conflicts_shown']} (review only)")
-print("- No turns or new road connections have been inferred or published.")
-PY
+          import json, sys
+          from pathlib import Path
+          report = json.loads(Path(sys.argv[1]).read_text())
+          print(f"### Road connectivity diagnostic: {report['region']}")
+          print(f"- Road ways examined: {report['road_ways']:,}")
+          print(f"- Node-sharing components: {report['components']:,}")
+          print(f"- Major-road endpoint candidates: {report['possible_major_road_ends']:,} (not proven errors)")
+          print(f"- Potential level-conflict examples: {report['potential_level_conflicts_shown']} (review only)")
+          print("- No turns or new road connections have been inferred or published.")
+          PY
           done
 
       - name: Painted lane arrows from street photos (Mapillary), where the map has none
