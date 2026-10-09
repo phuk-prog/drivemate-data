@@ -59,6 +59,57 @@ class FakeGitHub:
 
 
 class PublisherTest(unittest.TestCase):
+    def test_reconciled_navigation_assets_are_verified_and_preserved(self):
+        documents = {'limits-106_-5.json': {'ways': []},
+                     'roadinfo-106_-5.json': {'elements': []},
+                     'charge-zones-uk.json': {'zones': []},
+                     'build-quality.json': {'errors': []}}
+        for name, document in documents.items():
+            (self.out / name).write_text(json.dumps(document))
+        with gzip.open(self.out / 'search-offline-uk.tsv.gz', 'wt') as stream:
+            stream.write('#drivemate-search-offline\t1\t2026-10-09\tSynthetic credits\n'
+                         'sw1a1aa\tP\t\tLondon\t51.5\t-0.1\n')
+        publisher.publish(self.github, self.out, 'map-data-navigation', navigation_data=True)
+        manifest = json.loads(self.github.files['map-data-navigation']['manifest.json'])
+        self.assertTrue(set(documents) <= manifest['files'].keys())
+        self.assertIn('search-offline-uk.tsv.gz', manifest['files'])
+
+    def test_missing_navigation_datasets_stop_before_upload(self):
+        with self.assertRaisesRegex(ValueError, 'navigation datasets missing'):
+            publisher.publish(self.github, self.out, 'map-data-incomplete', navigation_data=True)
+        self.assertEqual([], self.github.actions)
+
+    def test_corrupt_offline_search_stops_before_any_upload(self):
+        (self.out / 'search-offline-uk.tsv.gz').write_bytes(b'not gzip')
+        with self.assertRaises(OSError):
+            publisher.publish(self.github, self.out, 'map-data-broken-search')
+        self.assertEqual([], self.github.actions)
+
+    def test_failing_quality_report_stops_before_any_upload(self):
+        (self.out / 'build-quality.json').write_text('{"errors": ["missing data"]}')
+        with self.assertRaisesRegex(ValueError, 'quality report'):
+            publisher.publish(self.github, self.out, 'map-data-broken-quality')
+        self.assertEqual([], self.github.actions)
+
+    def test_pointer_recovers_after_clobber_deletes_previous_asset(self):
+        self.legacy(count=4, pointer=True)
+        previous = self.github.files[publisher.LEGACY]['latest.json']
+        upload = self.github.upload
+        failed = False
+
+        def interrupted_upload(tag, path, mutable=False):
+            nonlocal failed
+            if tag == publisher.LEGACY and Path(path).name == 'latest.json' and not failed:
+                failed = True
+                del self.github.files[tag]['latest.json']
+                raise publisher.GitHubError('Interrupted after deleting old pointer')
+            return upload(tag, path, mutable)
+
+        with patch.object(self.github, 'upload', side_effect=interrupted_upload):
+            with self.assertRaisesRegex(publisher.GitHubError, 'Interrupted'):
+                publisher.publish(self.github, self.out, 'map-data-recovery')
+        self.assertEqual(previous, self.github.files[publisher.LEGACY]['latest.json'])
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

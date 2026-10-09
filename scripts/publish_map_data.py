@@ -6,6 +6,7 @@ existing legacy inventory; it does not claim that a previously partial build is 
 import argparse
 import gzip
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -150,8 +151,11 @@ def local_files(out):
         name = checked_name(path.name)
         if name in files:
             raise ValueError('Duplicate map asset basename')
-        if not (name in {'drivemate.pmtiles', 'cameras-uk.json', 'build-info.txt'} or
-                re.fullmatch(r'lanes--?\d+_-?\d+\.json', name) or
+        if not (name in {'drivemate.pmtiles', 'cameras-uk.json', 'build-info.txt',
+                         'charge-zones-uk.json', 'search-offline-uk.tsv.gz',
+                         'build-quality.json', 'build-quality.md', 'limit-checks.md',
+                         'mapillary-arrows-cache.json.gz', 'mapillary-signs-cache.json.gz'} or
+                re.fullmatch(r'(?:lanes|limits|roadinfo)--?\d+_-?\d+\.json', name) or
                 re.fullmatch(r'places--?\d+_-?\d+\.json\.gz', name)):
             raise ValueError('Unexpected map output file')
         size = path.stat().st_size
@@ -161,14 +165,30 @@ def local_files(out):
             with path.open('rb') as stream:
                 if size < MIN_MAP_BYTES or stream.read(7) != b'PMTiles':
                     raise ValueError('Map archive too small or invalid')
+        elif name == 'search-offline-uk.tsv.gz':
+            # Validate sorted records, attribution, bounds and the entire gzip CRC.
+            spec = importlib.util.spec_from_file_location('search_index', Path(__file__).with_name('search_index.py'))
+            validator = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(validator)
+            for _ in validator.rows(path):
+                pass
         elif name.endswith('.json.gz'):
             with gzip.open(path, 'rt', encoding='utf-8') as stream:
                 data = json.load(stream)
-            if not isinstance(data, list) or not all(isinstance(row, list) and len(row) == 5 for row in data):
+            if name.startswith('mapillary-'):
+                if not isinstance(data, dict):
+                    raise ValueError('Invalid observation cache')
+            elif not isinstance(data, list) or not all(isinstance(row, list) and len(row) == 5 for row in data):
                 raise ValueError('Invalid places data')
         elif name.endswith('.json'):
             data = json.loads(path.read_text(encoding='utf-8'))
-            key = 'elements' if name == 'cameras-uk.json' else 'ways'
+            if name == 'build-quality.json':
+                if not isinstance(data, dict) or data.get('errors') != []:
+                    raise ValueError('Missing or failing quality report')
+                files[name] = path
+                continue
+            key = ('zones' if name == 'charge-zones-uk.json' else
+                   'elements' if name == 'cameras-uk.json' or name.startswith('roadinfo-') else 'ways')
             if not isinstance(data, dict) or not isinstance(data.get(key), list):
                 raise ValueError('Invalid road or camera data')
         files[name] = path
@@ -214,6 +234,7 @@ def write_json(directory, name, document):
 def pointer(github, tag, manifest_tag, manifest_path, directory, extra_tag=None):
     # Validate the currently published pointer before any destructive replacement.
     existing = github.inventory(LEGACY)
+    prior = None
     if 'latest.json' in existing:
         prior = github.download(LEGACY, 'latest.json', Path(directory) / 'prior')
         verify_inventory(existing, {'latest.json': metadata(prior, LEGACY)}, LEGACY)
@@ -227,16 +248,33 @@ def pointer(github, tag, manifest_tag, manifest_path, directory, extra_tag=None)
     if extra_tag:
         document['extra_tag'] = checked_tag(extra_tag)
     path = write_json(directory, 'latest.json', document)
-    github.upload(LEGACY, path, mutable='latest.json' in existing)
-    verify_inventory(github.inventory(LEGACY), {'latest.json': metadata(path, LEGACY)}, LEGACY)
+    # GitHub clobber deletes the old asset before uploading its replacement.
+    # This is recoverable, but is not an atomic pointer swap.
+    try:
+        github.upload(LEGACY, path, mutable='latest.json' in existing)
+        verify_inventory(github.inventory(LEGACY), {'latest.json': metadata(path, LEGACY)}, LEGACY)
+    except Exception as promotion_error:
+        if prior is not None:
+            try:
+                current = github.inventory(LEGACY)
+                github.upload(LEGACY, prior, mutable='latest.json' in current)
+                verify_inventory(github.inventory(LEGACY), {'latest.json': metadata(prior, LEGACY)}, LEGACY)
+            except Exception as recovery_error:
+                raise GitHubError(f'Pointer promotion failed and previous pointer recovery failed: {recovery_error}') from promotion_error
+        raise
 
 
-def publish(github, out, tag, extra_tag=None):
+def publish(github, out, tag, extra_tag=None, navigation_data=False):
     checked_tag(tag)
     extra_tag = checked_tag(extra_tag or tag + '-extra')
     if tag == LEGACY or tag == extra_tag or extra_tag == LEGACY:
         raise ValueError('Distinct immutable tags required')
     files = local_files(out)
+    if navigation_data:
+        required = {'charge-zones-uk.json', 'search-offline-uk.tsv.gz', 'build-quality.json'}
+        if not required <= files.keys() or not all(any(name.startswith(prefix) for name in files)
+                                                  for prefix in ('limits-', 'roadinfo-')):
+            raise ValueError('Required navigation datasets missing')
     # Keep the map and build metadata in the main release; stable ordering for restartability.
     names = sorted(files, key=lambda name: (name != 'drivemate.pmtiles', name != 'build-info.txt', name))
     main = {name: files[name] for name in names[:MAIN_FILES]}
@@ -314,11 +352,12 @@ def main():
         if mode == 'publish':
             command.add_argument('--out', type=Path, required=True)
             command.add_argument('--extra-tag')
+            command.add_argument('--navigation-data', action='store_true')
     args = parser.parse_args()
     try:
         github = GitHub(args.repo)
         if args.mode == 'publish':
-            publish(github, args.out, args.tag, args.extra_tag)
+            publish(github, args.out, args.tag, args.extra_tag, args.navigation_data)
         else:
             bootstrap(github, args.tag)
     except (ValueError, OSError, GitHubError, json.JSONDecodeError) as exc:
