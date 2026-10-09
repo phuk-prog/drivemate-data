@@ -4,6 +4,7 @@ from pathlib import Path
 import gzip
 import json
 import sys
+from coverage_audit import audit as audit_coverage
 
 out = Path(sys.argv[1])
 previous_path = Path(sys.argv[2]) if len(sys.argv) > 2 else None
@@ -35,6 +36,7 @@ place_files = files("places/*.json.gz")
 lane_ways, bad_lanes = json_items(lane_files, "ways")
 limit_ways, bad_limits = json_items(limit_files, "ways")
 road_items, bad_road = json_items(road_files, "elements")
+regional_coverage = audit_coverage(out)
 
 def count_json(path):
     try:
@@ -60,8 +62,8 @@ metrics = {
     "zone_items": count_json(out / "charge-zones-uk.json"),
     "offline_search_bytes": (out / "search-offline-uk.tsv.gz").stat().st_size if (out / "search-offline-uk.tsv.gz").exists() else 0,
 }
-errors = []
-warnings = []
+errors = list(regional_coverage["errors"])
+warnings = list(regional_coverage["warnings"])
 
 for name, bad in (("lane files", bad_lanes), ("limit files", bad_limits), ("road-info files", bad_road)):
     if bad:
@@ -78,6 +80,7 @@ minimums = {
     "place_files": 150,
     "place_bytes": 5_000_000,
     "camera_items": 100,
+    "offline_search_bytes": 1_000_000,
 }
 for key, minimum in minimums.items():
     if metrics[key] < minimum:
@@ -90,7 +93,7 @@ if previous_path and previous_path.exists():
     except Exception as e:
         warnings.append(f"previous quality file unreadable: {e}")
 
-stable = ("map_bytes","lane_files","lane_ways","limit_files","limit_ways","roadinfo_files","roadinfo_items","place_files","place_bytes","camera_items")
+stable = ("map_bytes","lane_files","lane_ways","limit_files","limit_ways","roadinfo_files","roadinfo_items","place_files","place_bytes","camera_items","offline_search_bytes")
 for key in stable:
     old = previous.get(key)
     new = metrics[key]
@@ -106,6 +109,7 @@ for key in stable:
 report = {
     "version": 1,
     "metrics": metrics,
+    "nation_tile_probes": regional_coverage,
     "errors": errors,
     "warnings": warnings,
 }
@@ -114,6 +118,12 @@ json_out.write_text(json.dumps(report, indent=2) + "\n")
 lines = ["## DriveMate weekly data quality", "", "| Metric | This build | Previous |", "|---|---:|---:|"]
 for k, v in metrics.items():
     lines.append(f"| {k} | {v:,} | {previous.get(k, '—') if previous.get(k) is not None else '—'} |")
+lines += ["", "### Four-nation data presence (city-centre probes only; not completeness)",
+          "", "| Nation | Lanes | Limits | Road information | Places |", "|---|---|---|---|---|"]
+for nation, probe in regional_coverage["probes"].items():
+    flags = ["yes" if probe["layers"][layer]["populated"] else "MISSING"
+             for layer in ("lanes", "limits", "roadinfo", "places")]
+    lines.append(f"| {nation} | " + " | ".join(flags) + " |")
 if warnings:
     lines += ["", "### Warnings"] + [f"- ⚠️ {x}" for x in warnings]
 if errors:
