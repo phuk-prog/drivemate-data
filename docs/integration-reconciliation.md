@@ -43,3 +43,24 @@ OS/Royal Mail sources and Mapillary derivatives still require review. Missing
 optional sources are recorded and warned about, not misrepresented as used.
 The old release is unchanged until an independently validated production
 generation is published.
+
+## Broader map-data geographical quality gates — 9 October 2026
+
+Additional region samples cover **19 more populated UK centres** across England,
+Scotland, Wales and Northern Ireland, on top of the four previous nation-capital/
+core-city samples. All four previous core checks remain strict for each map
+layer; the additional 19 checks require populated **places** tiles. Missing
+lane/limit/roadside records at additional sites are flagged as unknown/warnings
+rather than fabricating road features.
+
+The quality gate also parses **every** compressed `places-*.json.gz` file, checking
+gzip integrity, 5-element record shape, coordinates, and quarter-degree tile
+assignment. Corrupt or malformed archives block publication even if they are
+outside the sampled centres. Counts and regional observations are recorded
+in `build-quality.json` and the workflow summary.
+
+**Explicit limitations:** The city samples do not prove UK geographic
+completeness, address coverage, route legal validity, or verified road-level
+information. Fully validating those requires external independent reference
+data, ground-truth cases and routing topology audits. No new UK-wide data
+build or production publication is implied by these source checks.

@@ -62,6 +62,8 @@ metrics = {
     "camera_items": count_json(out / "cameras-uk.json"),
     "zone_items": count_json(out / "charge-zones-uk.json"),
     "offline_search_bytes": (out / "search-offline-uk.tsv.gz").stat().st_size if (out / "search-offline-uk.tsv.gz").exists() else 0,
+    "checked_place_records": regional_coverage["place_archive_audit"]["records_checked"],
+    "invalid_places_archives": regional_coverage["place_archive_audit"]["invalid_or_empty"],
 }
 errors = list(regional_coverage["errors"])
 warnings = list(regional_coverage["warnings"])
@@ -127,12 +129,21 @@ json_out.write_text(json.dumps(report, indent=2) + "\n")
 lines = ["## DriveMate weekly data quality", "", "| Metric | This build | Previous |", "|---|---:|---:|"]
 for k, v in metrics.items():
     lines.append(f"| {k} | {v:,} | {previous.get(k, '—') if previous.get(k) is not None else '—'} |")
-lines += ["", "### Four-nation data presence (city-centre probes only; not completeness)",
+lines += ["", "### Coverage samples: 4 core cities and 19 additional UK cities (not nationwide completeness)",
           "", "| Nation | Lanes | Limits | Road information | Places |", "|---|---|---|---|---|"]
 for nation, probe in regional_coverage["probes"].items():
     flags = ["yes" if probe["layers"][layer]["populated"] else "MISSING"
              for layer in ("lanes", "limits", "roadinfo", "places")]
     lines.append(f"| {nation} | " + " | ".join(flags) + " |")
+lines += ["", "### Additional regional samples", "", "| Nation | Town/city | Place records |",
+          "|---|---|---:|"]
+for nation, cities in regional_coverage["regional_probes"].items():
+    for city in cities:
+        places = city["layers"]["places"]
+        lines.append(f"| {nation} | {city['city']} | {places['records'] if places['populated'] else 'MISSING'} |")
+lines += ["", f"Full places scan: {regional_coverage['place_archive_audit']['files_checked']} archives, "
+          f"{regional_coverage['place_archive_audit']['records_checked']:,} records, "
+          f"{regional_coverage['place_archive_audit']['invalid_or_empty']} invalid/empty files."]
 if warnings:
     lines += ["", "### Warnings"] + [f"- ⚠️ {x}" for x in warnings]
 if errors:
