@@ -8,6 +8,12 @@ name: Build our own map data
 #  - search-offline-uk.tsv.gz: every GB postcode, street and named place, for search with no signal
 on:
   workflow_dispatch:
+    inputs:
+      components:
+        description: Build maps and routing, or routing only
+        type: choice
+        default: all
+        options: [all, routing]
   schedule:
     - cron: "17 3 * * 1" # every Monday morning, to stay up to date
   push:
@@ -30,6 +36,7 @@ env:
 
 jobs:
   build:
+    if: inputs.components != 'routing'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
@@ -270,6 +277,7 @@ jobs:
   # first, checked, and only then does routing-uk.json (what phones read) switch to them.
   routing:
     needs: build
+    if: always() && (needs.build.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.components == 'routing'))
     runs-on: ubuntu-latest
     timeout-minutes: 300
     env:
@@ -289,31 +297,30 @@ jobs:
           python3 -m venv work/vh
           work/vh/bin/pip install -q pyvalhalla==3.6.3
           curl -sSfL -o work/valhalla_build_extract https://raw.githubusercontent.com/valhalla/valhalla/3.6.3/scripts/valhalla_build_extract
+          echo '37daac2ff760552c79431b41653be6d457e7e30d051e400c29064208fce65ae4  work/valhalla_build_extract' | sha256sum --check --strict
 
       - name: OpenStreetMap base (Geofabrik, whole UK)
         run: |
           curl -sSfL -o work/base.osm.pbf "https://download.geofabrik.de/${REGION}-latest.osm.pbf"
+          sha256sum work/base.osm.pbf | cut -d' ' -f1 > work/source.sha256
+          date -u +%FT%TZ > work/source-retrieved.txt
           ls -lh work/base.osm.pbf
 
       - name: Build the road graph
         run: |
+          set -euo pipefail
           export PATH="$PWD/work/vh/bin:$PATH"
-          # Only roads a car can use (plus ferries and turn bans): footpaths and cycle paths
-          # make the file much bigger and are never used for driving.
-          osmium tags-filter work/base.osm.pbf \
-            w/highway=motorway,trunk,primary,secondary,tertiary,unclassified,residential,service,living_street,road,track,motorway_link,trunk_link,primary_link,secondary_link,tertiary_link \
-            w/route=ferry r/type=restriction -o work/drive.osm.pbf --overwrite
-          ls -lh work/drive.osm.pbf
+          # Let Valhalla apply access and restriction semantics to the full source.
+          # Filtering highway classes can discard explicitly vehicle-accessible ways.
           mkdir -p work/tiles
           python3 work/vh/lib/python3*/site-packages/valhalla/valhalla_build_config.py \
             --mjolnir-tile-dir "$PWD/work/tiles" --mjolnir-tile-extract "$PWD/work/uk.tar" \
             --mjolnir-admin "$PWD/work/admin.sqlite" --mjolnir-concurrency "$(nproc)" > work/valhalla.json
           # Country boundaries from the full file: they set driving side and country rules.
           valhalla_build_admins -c work/valhalla.json work/base.osm.pbf 2>&1 | tail -n 3
-          rm work/base.osm.pbf
-          valhalla_build_tiles -c work/valhalla.json work/drive.osm.pbf 2>&1 | tail -n 5
+          valhalla_build_tiles -c work/valhalla.json work/base.osm.pbf 2>&1 | tail -n 5
           python3 work/valhalla_build_extract -c work/valhalla.json -v 2>&1 | tail -n 2
-          rm -rf work/tiles work/drive.osm.pbf
+          rm -rf work/tiles work/base.osm.pbf
           ls -lh work/uk.tar
 
       - name: Test journeys across the UK (must all work before publishing)
@@ -350,35 +357,37 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          STAMP="$(date -u +%Y%m%d)-r${GITHUB_RUN_NUMBER}"
-          sha=$(sha256sum work/uk.tar | cut -d' ' -f1)
-          bytes=$(stat -c %s work/uk.tar)
-          pigz -6 -c work/uk.tar > work/uk.tar.gz && rm work/uk.tar
-          # GitHub allows 2 GB per file: split into pieces the phone joins back together.
-          split -b 1900M -d -a 2 work/uk.tar.gz "work/valhalla-uk-$STAMP.tar.gz.part"
+          set -euo pipefail
+          STAMP="$(date -u +%Y%m%d)-r${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}"
+          export STAMP
+          mkdir -p work/routing-out
+          sha256sum work/uk.tar | cut -d' ' -f1 > work/graph.sha256
+          stat -c %s work/uk.tar > work/graph.bytes
+          pigz -6 -c work/uk.tar > work/uk.tar.gz
+          split -b 1900M -d -a 2 work/uk.tar.gz "work/routing-out/valhalla-uk-$STAMP.tar.gz.part"
           rm work/uk.tar.gz
-          gh release view "$RTAG" >/dev/null 2>&1 || gh release create "$RTAG" --title "Routing: UK (no-signal routes)" --prerelease \
-            --notes "Road graph for routes worked out on the phone (Valhalla 3.6.3), built weekly from OpenStreetMap (© OpenStreetMap contributors, ODbL). routing-uk.json names the current pieces."
-          up() { for i in 1 2 3 4 5; do gh release upload "$RTAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
-          parts=(work/valhalla-uk-$STAMP.tar.gz.part*)
-          for p in "${parts[@]}"; do up "$p"; done
-          # Check the pieces arrived whole before switching phones over.
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RTAG" --jq .id)
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --jq '.[] | select(.state == "uploaded") | "\(.name) \(.size)"' | sort > work/published.txt
-          for p in "${parts[@]}"; do grep -qx "$(basename "$p") $(stat -c %s "$p")" work/published.txt || { echo "::error::piece missing: $p"; exit 1; }; done
-          # Pieces of the build phones use now: kept until next week.
-          prev=$(curl -sfL "https://github.com/$GITHUB_REPOSITORY/releases/download/$RTAG/routing-uk.json" | jq -r '.parts[]?' || true)
-          gz=0; for p in "${parts[@]}"; do gz=$((gz + $(stat -c %s "$p"))); done
-          jq -n --arg sha "$sha" --argjson bytes "$bytes" --argjson gz "$gz" --arg built "$(date -u +%FT%TZ)" \
-            --argjson parts "$(printf '%s\n' "${parts[@]##*/}" | jq -R . | jq -s .)" \
-            '{engine: "valhalla-3.6.3", sha256: $sha, bytes: $bytes, download_bytes: $gz, built: $built, parts: $parts}' > work/routing-uk.json
-          cat work/routing-uk.json
-          up work/routing-uk.json
-          # Remove pieces older than the previous build.
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --jq '.[] | "\(.id) \(.name)"' |
-            while read -r aid name; do
-              case "$name" in valhalla-uk-$STAMP.*|routing-uk.json) continue ;; esac
-              echo "$prev" | grep -qx "$name" && continue
-              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$aid" || true
-            done
-          echo "Road graph for no-signal routes: $((bytes / 1048576)) MB on the phone, $((gz / 1048576)) MB download" >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PYTHON'
+          import datetime, json, os
+          from pathlib import Path
+          out = Path('work/routing-out')
+          parts = sorted(out.glob('*.part*'))
+          document = {
+              'engine': 'valhalla-3.6.3',
+              'sha256': Path('work/graph.sha256').read_text().strip(),
+              'bytes': int(Path('work/graph.bytes').read_text()),
+              'download_bytes': sum(p.stat().st_size for p in parts),
+              'built': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'parts': [p.name for p in parts],
+              'source': {
+                  'licence': 'ODbL-1.0', 'attribution': '© OpenStreetMap contributors',
+                  'url': 'https://download.geofabrik.de/' + os.environ['REGION'] + '-latest.osm.pbf',
+                  'sha256': Path('work/source.sha256').read_text().strip(),
+                  'retrieved_at': Path('work/source-retrieved.txt').read_text().strip()},
+              'build_commit': os.environ['GITHUB_SHA'],
+              'build_run': os.environ['GITHUB_RUN_ID'],
+              'coverage_validation': 'Six route smoke checks; not proof of every road or legal restriction'}
+          (out / 'routing-uk.json').write_text(json.dumps(document, indent=2) + '\n')
+          PYTHON
+          python3 scripts/publish_routing_data.py --repo "$GITHUB_REPOSITORY" \
+            --out work/routing-out --tag "routing-uk-$STAMP"
+          echo 'Graph chunks and decoded checksum verified; previous generations retained.' >> "$GITHUB_STEP_SUMMARY"

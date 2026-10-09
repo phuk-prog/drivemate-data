@@ -76,3 +76,26 @@ Provisional decision: retain MapLibre, Valhalla, Planetiler and PMTiles while
 completing performance, full-profile and shared guidance evaluation. Keep
 Ferrostar as a measurable candidate. No full rewrite is justified by the
 evidence collected so far.
+
+### UK graph publication recovery (2026-10-09)
+
+The `routing-uk` release was absent when inspected. Manchester routing remains the
+only downloaded native graph verified in the application; UK capability is not yet
+established. The previous workflow verified uploaded sizes alone and could hide
+failed graph/admin builders behind `tail` without `pipefail`.
+
+The replacement publisher verifies gzip CRC, bounded decoded size, final SHA-256,
+per-piece GitHub SHA-256 and immutable generation inventories before changing the
+backward-compatible pointer. A failed replacement restores and verifies the prior
+pointer. GitHub replacement is recoverable, not atomic. Previous chunks and immutable
+manifests remain available; capacity exhaustion stops publication rather than deleting
+older graphs. Source PBF fingerprint, retrieval date, licence and build identity are
+recorded. Six journey smoke checks still do not prove geographical completeness,
+correct turn restrictions or legal routing.
+
+Graph builders now fail on pipeline errors and read the full OSM source. The previous
+highway-class filter could omit explicitly vehicle-accessible ways. Valhalla owns access
+interpretation; building every class may increase disk and memory needs. A routing-only
+manual workflow input permits a serial UK trial without rebuilding unrelated map data.
+The official extract script is checksum pinned. The pyvalhalla wheel remains version
+pinned rather than digest pinned. No UK build or publication is claimed by source tests.
