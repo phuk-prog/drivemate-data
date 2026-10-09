@@ -125,8 +125,8 @@ class PublisherTest(unittest.TestCase):
         }.items():
             (self.out / name).write_text(json.dumps(data))
         with gzip.open(self.out / 'search-offline-uk.tsv.gz', 'wt') as stream:
-            stream.write('#drivemate-search-offline\\t1\\t2026-10-09\\tSynthetic credits\\n'
-                         'sw1a1aa\\tP\\t\\tLondon\\t51.5\\t-0.1\\n')
+            stream.write('#drivemate-search-offline\t1\t2026-10-09\tSynthetic credits\n'
+                         'sw1a1aa\tP\t\tLondon\t51.5\t-0.1\n')
         spec = importlib.util.spec_from_file_location(
             'source_inventory', Path(__file__).resolve().parents[1] / 'scripts/source_inventory.py')
         inventory = importlib.util.module_from_spec(spec)
