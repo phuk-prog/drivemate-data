@@ -86,3 +86,24 @@ build is claimed by these tests**.
 Caution: complete OSM node connectivity, junction legality, turn restrictions,
 physical lanes and every region border require independent comprehensive
 audits; geometric tile continuity and sample routes do not prove them.
+
+## Junction topology diagnostics (development only)
+
+Added `scripts/junction_topology.py` to inspect **real shared OSM node IDs**
+from Osmium OPL way records. It reports sample network components, possibly
+unconnected major road ends, malformed adjacent node references and candidate
+interior shared-node conflicts between explicitly grade-separated roads.
+
+**Critical safeguards:** a visually crossing road with two different node IDs
+is never invented as a junction; a bridge-to-road transition at a way endpoint
+is not automatically considered erroneous; legitimate residential/service
+dead ends are not reported as major-road failures; uncertain cases are reported
+for human review, never added to navigable topology.
+
+Two source-sample audits (Manchester and Belfast) are added to the next full
+UK map build using reference-complete Osmium extracts. The extra reports go
+into the workflow summary/work directory, **not** into a published routing
+graph or the Android app. These are diagnostics, not evidence of all UK
+road-connected components, legal turn permissions, individual lane links,
+restriction relations, or updated ground truth. No production graph build
+or road-data correction is claimed until independently run and checked.
