@@ -253,6 +253,16 @@ jobs:
           ls -lh out/search-offline-uk.tsv.gz
           echo "Offline search: $(du -h out/search-offline-uk.tsv.gz | cut -f1) ($(zcat out/search-offline-uk.tsv.gz | wc -l) lines)" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Record source fingerprints and rights-review status
+        run: |
+          python3 scripts/source_inventory.py --osm work/base.osm.pbf \
+            --osm-url "https://download.geofabrik.de/${REGION}-latest.osm.pbf" \
+            --overture work/places.parquet --os-names work/opennames.zip \
+            --mapillary-arrows out/mapillary-arrows-cache.json.gz \
+            --mapillary-signs out/mapillary-signs-cache.json.gz \
+            --out out/source-inventory.json
+          python3 scripts/source_inventory.py --validate out/source-inventory.json
+
       - name: Whole-build data quality gate
         env:
           GH_TOKEN: ${{ github.token }}

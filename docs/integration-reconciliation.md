@@ -28,3 +28,18 @@ No production publication or whole-UK data build has been run for this change.
 
 The SQLite search prototype and synthetic comparative results remain an
 experiment. They are not yet integrated into the Android app or publication.
+
+## Source input fingerprints and rights review — 9 October 2026
+
+The new `source-inventory.json` records SHA-256 hashes, sizes and presence
+of the exact OpenStreetMap PBF and available Overture places, OS Open Names
+archive and Mapillary-derived observation caches. It is included in the
+immutable release manifest. A navigation-data publication now refuses a
+missing, malformed or inconsistent inventory before uploading.
+
+This is input-file provenance, **not** per-feature lineage or legal clearance.
+Planetiler ancillary downloads and the detailed reuse rights of Overture,
+OS/Royal Mail sources and Mapillary derivatives still require review. Missing
+optional sources are recorded and warned about, not misrepresented as used.
+The old release is unchanged until an independently validated production
+generation is published.

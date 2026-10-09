@@ -69,10 +69,24 @@ class PublisherTest(unittest.TestCase):
         with gzip.open(self.out / 'search-offline-uk.tsv.gz', 'wt') as stream:
             stream.write('#drivemate-search-offline\t1\t2026-10-09\tSynthetic credits\n'
                          'sw1a1aa\tP\t\tLondon\t51.5\t-0.1\n')
+        spec = importlib.util.spec_from_file_location(
+            'source_inventory', Path(__file__).resolve().parents[1] / 'scripts/source_inventory.py')
+        inventory = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inventory)
+        source_file = self.out.parent / 'synthetic.osm.pbf'
+        source_file.write_bytes(b'synthetic source')
+        inputs = {k: self.out.parent / (k + '.missing') for k in inventory.SOURCES if k != 'osm_uk'}
+        provenance = inventory.build(source_file,
+            'https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf', inputs)
+        (self.out / 'source-inventory.json').write_text(json.dumps(provenance))
         publisher.publish(self.github, self.out, 'map-data-navigation', navigation_data=True)
         manifest = json.loads(self.github.files['map-data-navigation']['manifest.json'])
         self.assertTrue(set(documents) <= manifest['files'].keys())
         self.assertIn('search-offline-uk.tsv.gz', manifest['files'])
+        self.assertIn('source-inventory.json', manifest['files'])
+        self.assertEqual('source-inventory.json', manifest['source_inventory']['asset'])
+        self.assertEqual(hashlib.sha256((self.out / 'source-inventory.json').read_bytes()).hexdigest(),
+                         manifest['source_inventory']['sha256'])
 
     def test_missing_navigation_datasets_stop_before_upload(self):
         with self.assertRaisesRegex(ValueError, 'navigation datasets missing'):

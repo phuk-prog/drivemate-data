@@ -5,6 +5,7 @@ import gzip
 import json
 import sys
 from coverage_audit import audit as audit_coverage
+from source_inventory import read as read_source_inventory
 
 out = Path(sys.argv[1])
 previous_path = Path(sys.argv[2]) if len(sys.argv) > 2 else None
@@ -64,6 +65,14 @@ metrics = {
 }
 errors = list(regional_coverage["errors"])
 warnings = list(regional_coverage["warnings"])
+try:
+    source_inventory = read_source_inventory(out / "source-inventory.json")
+    for item in source_inventory["sources"]:
+        if not item["present"]:
+            warnings.append(f"Optional source not available: {item['id']}")
+    warnings.append("Licence declarations require separate legal review; file fingerprints alone do not prove reuse rights.")
+except (ValueError, OSError, UnicodeError, json.JSONDecodeError) as exc:
+    errors.append(f"Source inventory invalid or missing: {exc}")
 
 for name, bad in (("lane files", bad_lanes), ("limit files", bad_limits), ("road-info files", bad_road)):
     if bad:

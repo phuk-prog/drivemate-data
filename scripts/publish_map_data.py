@@ -154,7 +154,8 @@ def local_files(out):
         if not (name in {'drivemate.pmtiles', 'cameras-uk.json', 'build-info.txt',
                          'charge-zones-uk.json', 'search-offline-uk.tsv.gz',
                          'build-quality.json', 'build-quality.md', 'limit-checks.md',
-                         'mapillary-arrows-cache.json.gz', 'mapillary-signs-cache.json.gz'} or
+                         'mapillary-arrows-cache.json.gz', 'mapillary-signs-cache.json.gz',
+                         'source-inventory.json'} or
                 re.fullmatch(r'(?:lanes|limits|roadinfo)--?\d+_-?\d+\.json', name) or
                 re.fullmatch(r'places--?\d+_-?\d+\.json\.gz', name)):
             raise ValueError('Unexpected map output file')
@@ -182,6 +183,15 @@ def local_files(out):
                 raise ValueError('Invalid places data')
         elif name.endswith('.json'):
             data = json.loads(path.read_text(encoding='utf-8'))
+            if name == 'source-inventory.json':
+                # Import by path: publisher tests load this file as a standalone module.
+                spec = importlib.util.spec_from_file_location(
+                    'source_inventory', Path(__file__).with_name('source_inventory.py'))
+                inventory = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(inventory)
+                inventory.read(path)
+                files[name] = path
+                continue
             if name == 'build-quality.json':
                 if not isinstance(data, dict) or data.get('errors') != []:
                     raise ValueError('Missing or failing quality report')
@@ -271,7 +281,7 @@ def publish(github, out, tag, extra_tag=None, navigation_data=False):
         raise ValueError('Distinct immutable tags required')
     files = local_files(out)
     if navigation_data:
-        required = {'charge-zones-uk.json', 'search-offline-uk.tsv.gz', 'build-quality.json'}
+        required = {'charge-zones-uk.json', 'search-offline-uk.tsv.gz', 'build-quality.json', 'source-inventory.json'}
         if not required <= files.keys() or not all(any(name.startswith(prefix) for name in files)
                                                   for prefix in ('limits-', 'roadinfo-')):
             raise ValueError('Required navigation datasets missing')
@@ -283,7 +293,13 @@ def publish(github, out, tag, extra_tag=None, navigation_data=False):
         raise ValueError('Map inventory exceeds two release capacity')
     manifest_files = {name: metadata(path, tag if name in main else extra_tag) for name, path in files.items()}
     with tempfile.TemporaryDirectory(prefix='drivemate-publish-') as temporary:
-        manifest = write_json(temporary, 'manifest.json', {'schema': 1, 'files': manifest_files})
+        manifest_doc = {'schema': 1, 'files': manifest_files}
+        if 'source-inventory.json' in files:
+            manifest_doc['source_inventory'] = {
+                'asset': 'source-inventory.json',
+                'sha256': digest(files['source-inventory.json']),
+                'scope': 'Selected inputs; rights not independently verified'}
+        manifest = write_json(temporary, 'manifest.json', manifest_doc)
         main['manifest.json'] = manifest
         if extra:
             upload_immutable(github, extra_tag, extra)
