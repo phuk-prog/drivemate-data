@@ -1,0 +1,129 @@
+{
+  "scope": "desktop native offline routing, not Android or legal correctness",
+  "python": "3.12.14",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "pyvalhalla": "3.6.3",
+  "graph_sha256": "7f26427538706de8f9918c33ca1846aef6269699f144bab08dcc6c514c5e039b",
+  "cases": {
+    "manchester_to_stockport": {
+      "request": {
+        "locations": [
+          {
+            "lat": 53.4808,
+            "lon": -2.2426
+          },
+          {
+            "lat": 53.4106,
+            "lon": -2.1575
+          }
+        ],
+        "costing": "auto",
+        "units": "kilometers"
+      },
+      "first_ms": 965.7606880000458,
+      "warm_median_ms": 254.9233090001053,
+      "all_ms": [
+        965.7606880000458,
+        280.2352369999426,
+        197.5609699998131,
+        317.47644699999,
+        290.5359420001332,
+        204.34303799993359,
+        229.611381000268
+      ],
+      "length_km": 11.36,
+      "duration_seconds": 952.031
+    },
+    "stockport_to_manchester": {
+      "request": {
+        "locations": [
+          {
+            "lat": 53.4106,
+            "lon": -2.1575
+          },
+          {
+            "lat": 53.4808,
+            "lon": -2.2426
+          }
+        ],
+        "costing": "auto",
+        "units": "kilometers"
+      },
+      "first_ms": 289.6738730000834,
+      "warm_median_ms": 274.83518999997614,
+      "all_ms": [
+        289.6738730000834,
+        270.66285699993387,
+        243.34281600022223,
+        279.0075230000184,
+        281.3475190000645,
+        244.87943499980247,
+        279.11527700007355
+      ],
+      "length_km": 12.837,
+      "duration_seconds": 1047.803
+    },
+    "airport_to_manchester": {
+      "request": {
+        "locations": [
+          {
+            "lat": 53.365,
+            "lon": -2.272
+          },
+          {
+            "lat": 53.4808,
+            "lon": -2.2426
+          }
+        ],
+        "costing": "auto",
+        "units": "kilometers"
+      },
+      "first_ms": 127.12542799999937,
+      "warm_median_ms": 146.14027299990084,
+      "all_ms": [
+        127.12542799999937,
+        167.341641999883,
+        172.34317200018268,
+        124.9389039999187,
+        124.45741999999882,
+        111.17231100024583,
+        271.30492900005265
+      ],
+      "length_km": 15.318,
+      "duration_seconds": 971.033
+    },
+    "bolton_to_stockport": {
+      "request": {
+        "locations": [
+          {
+            "lat": 53.578,
+            "lon": -2.429
+          },
+          {
+            "lat": 53.4106,
+            "lon": -2.1575
+          }
+        ],
+        "costing": "auto",
+        "units": "kilometers"
+      },
+      "first_ms": 205.79051899994738,
+      "warm_median_ms": 264.1744315001233,
+      "all_ms": [
+        205.79051899994738,
+        285.01716800019494,
+        316.6101990000243,
+        279.2317550001826,
+        249.11710800006404,
+        237.55722900023102,
+        248.29359800014572
+      ],
+      "length_km": 34.983,
+      "duration_seconds": 1362.885
+    }
+  },
+  "unpack_verify_ms": 3195.9092750003038,
+  "graph_bytes": 99502080,
+  "actor_init_ms": 52.384195999820804,
+  "process_peak_rss_kib": 134448
+}
