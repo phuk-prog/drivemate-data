@@ -1,0 +1,129 @@
+{
+  "scope": "road-only regional archive-format comparison",
+  "planetiler": "0.10.1",
+  "jar_sha256": "5e5e7d8c4fc89b4573cc9109d0a543c3c2c798b2bcde7c3dcd2214031ee59c29",
+  "input_sha256": "de5be3939f6b52b9919eb05b7537ca58544bd9f3852d0f60ea9ba3d462fb52a9",
+  "profile_sha256": "84ce06a424322a182cddb6e72c97f694541ac920ff1b71bf1e306355fc530976",
+  "java": "openjdk version \"21.0.12.1\" 2026-08-18\nOpenJDK Runtime Environment (build 21.0.12.1+1-1-deb13u1-Debian)\nOpenJDK 64-Bit Server VM (build 21.0.12.1+1-1-deb13u1-Debian, mixed mode, sharing)\n",
+  "formats": {
+    "pmtiles": {
+      "runs": [
+        {
+          "command": [
+            "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
+            "-Xmx2g",
+            "-jar",
+            "/workspace/toolchains/downloads/planetiler-0.10.1.jar",
+            "/workspace/checkouts/drivemate-data/scripts/benchmark-road-profile.yml",
+            "--osm-path=/workspace/benchmarks/isle-of-wight.osm.pbf",
+            "--output=/workspace/benchmarks/vector-format-repeated/roads.pmtiles",
+            "--threads=2",
+            "--maxzoom=14",
+            "--force"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 7.700583237000501,
+          "peak_rss_kib": 1486628
+        },
+        {
+          "command": [
+            "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
+            "-Xmx2g",
+            "-jar",
+            "/workspace/toolchains/downloads/planetiler-0.10.1.jar",
+            "/workspace/checkouts/drivemate-data/scripts/benchmark-road-profile.yml",
+            "--osm-path=/workspace/benchmarks/isle-of-wight.osm.pbf",
+            "--output=/workspace/benchmarks/vector-format-repeated/roads.pmtiles",
+            "--threads=2",
+            "--maxzoom=14",
+            "--force"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 7.307194194000658,
+          "peak_rss_kib": 1501744
+        },
+        {
+          "command": [
+            "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
+            "-Xmx2g",
+            "-jar",
+            "/workspace/toolchains/downloads/planetiler-0.10.1.jar",
+            "/workspace/checkouts/drivemate-data/scripts/benchmark-road-profile.yml",
+            "--osm-path=/workspace/benchmarks/isle-of-wight.osm.pbf",
+            "--output=/workspace/benchmarks/vector-format-repeated/roads.pmtiles",
+            "--threads=2",
+            "--maxzoom=14",
+            "--force"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 6.870052776999728,
+          "peak_rss_kib": 1478848
+        }
+      ],
+      "median_build_seconds": 7.307194194000658,
+      "archive_bytes": 567709,
+      "archive_sha256": "81bed748721f26c15860a797dab18055754912ae350bdbf773c86dcb1b66a133",
+      "tiles": 279
+    },
+    "mbtiles": {
+      "runs": [
+        {
+          "command": [
+            "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
+            "-Xmx2g",
+            "-jar",
+            "/workspace/toolchains/downloads/planetiler-0.10.1.jar",
+            "/workspace/checkouts/drivemate-data/scripts/benchmark-road-profile.yml",
+            "--osm-path=/workspace/benchmarks/isle-of-wight.osm.pbf",
+            "--output=/workspace/benchmarks/vector-format-repeated/roads.mbtiles",
+            "--threads=2",
+            "--maxzoom=14",
+            "--force"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 7.39503613999932,
+          "peak_rss_kib": 1402504
+        },
+        {
+          "command": [
+            "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
+            "-Xmx2g",
+            "-jar",
+            "/workspace/toolchains/downloads/planetiler-0.10.1.jar",
+            "/workspace/checkouts/drivemate-data/scripts/benchmark-road-profile.yml",
+            "--osm-path=/workspace/benchmarks/isle-of-wight.osm.pbf",
+            "--output=/workspace/benchmarks/vector-format-repeated/roads.mbtiles",
+            "--threads=2",
+            "--maxzoom=14",
+            "--force"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 7.23619726600009,
+          "peak_rss_kib": 1413984
+        },
+        {
+          "command": [
+            "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
+            "-Xmx2g",
+            "-jar",
+            "/workspace/toolchains/downloads/planetiler-0.10.1.jar",
+            "/workspace/checkouts/drivemate-data/scripts/benchmark-road-profile.yml",
+            "--osm-path=/workspace/benchmarks/isle-of-wight.osm.pbf",
+            "--output=/workspace/benchmarks/vector-format-repeated/roads.mbtiles",
+            "--threads=2",
+            "--maxzoom=14",
+            "--force"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 7.011594671000239,
+          "peak_rss_kib": 1493724
+        }
+      ],
+      "median_build_seconds": 7.23619726600009,
+      "archive_bytes": 651264,
+      "archive_sha256": "a0a53988f8cde3d8b552acbfad96c14a7c3c3828fc1354176cf95b1054db4400",
+      "tiles": 279
+    }
+  },
+  "same_tile_coordinates_and_payloads": true
+}

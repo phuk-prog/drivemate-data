@@ -2,8 +2,6 @@ name: Junction lane diagnostic
 
 on:
   workflow_dispatch:
-  push:
-    paths: [".github/workflows/junction-diag.yml"]
 
 permissions:
   contents: read

@@ -25,6 +25,8 @@ env:
   REGION: europe/united-kingdom
   TAG: map-data-uk
   XTAG: map-data-uk-extra
+  PLANETILER_VERSION: '0.10.1'
+  PLANETILER_SHA256: 5e5e7d8c4fc89b4573cc9109d0a543c3c2c798b2bcde7c3dcd2214031ee59c29
 
 jobs:
   build:
@@ -66,7 +68,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          curl -sSfL -o work/planetiler.jar https://github.com/onthegomap/planetiler/releases/latest/download/planetiler.jar
+          curl -sSfL -o work/planetiler.jar "https://github.com/onthegomap/planetiler/releases/download/v${PLANETILER_VERSION}/planetiler.jar"
+          printf '%s  %s\n' "$PLANETILER_SHA256" work/planetiler.jar | sha256sum --check --strict
           java -Xmx12g -jar work/planetiler.jar --osm-path=work/base.osm.pbf --output=out/drivemate.pmtiles \
             --download --download-dir=work/sources --force 2>&1 | tail -n 25
           ls -lh out/drivemate.pmtiles
