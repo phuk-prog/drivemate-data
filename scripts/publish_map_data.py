@@ -285,6 +285,14 @@ def publish(github, out, tag, extra_tag=None, navigation_data=False):
         if not required <= files.keys() or not all(any(name.startswith(prefix) for name in files)
                                                   for prefix in ('limits-', 'roadinfo-')):
             raise ValueError('Required navigation datasets missing')
+    if navigation_data:
+        # A report saying errors=[] is not proof it checked this exact output.
+        # Compare every asset hash and filename before any remote release action.
+        spec = importlib.util.spec_from_file_location(
+            'publication_consistency', Path(__file__).with_name('publication_consistency.py'))
+        consistency = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(consistency)
+        consistency.verify_snapshot(out, consistency.read_report(files['build-quality.json']))
     # Keep the map and build metadata in the main release; stable ordering for restartability.
     names = sorted(files, key=lambda name: (name != 'drivemate.pmtiles', name != 'build-info.txt', name))
     main = {name: files[name] for name in names[:MAIN_FILES]}

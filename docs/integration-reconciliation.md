@@ -129,3 +129,19 @@ OPL records. Passing source CI is **not evidence** of the actual UK relation
 results, Valhalla's interpretation, real-world road signs, or legally permitted
 routes. A full graph build and targeted driving-route verification are required
 before considering any changes to live routing behavior.
+
+## Pre-publication quality report binding — October 2026
+
+The map-build quality gate records a SHA-256 and byte length for each output
+asset except the quality report/Markdown generated after the snapshot. The
+navigation-data publisher **refuses to upload anything** unless the report's
+exact filenames and hashes match all current files. This closes the gap where
+a stale, copied, or merely `{"errors":[]}` report could previously be used
+to publish altered or missing map data. Regression tests cover changes,
+deleted or added regional files, symlinks, and a stale 'passed' report.
+
+This adds read-only hashing before publication; it does not generate new
+geographical data. The previous verified map remains in place if the gate
+fails. Cryptographic file consistency is not evidence of source legality,
+territorial coverage, route validity, or an independent signing authority.
+The full UK data build and publish still require separate validation.

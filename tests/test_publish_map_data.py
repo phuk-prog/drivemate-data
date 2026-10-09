@@ -79,6 +79,12 @@ class PublisherTest(unittest.TestCase):
         provenance = inventory.build(source_file,
             'https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf', inputs)
         (self.out / 'source-inventory.json').write_text(json.dumps(provenance))
+        spec = importlib.util.spec_from_file_location(
+            'publication_consistency', Path(__file__).resolve().parents[1] / 'scripts/publication_consistency.py')
+        binder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(binder)
+        (self.out / 'build-quality.json').write_text(json.dumps({
+            'errors': [], 'asset_snapshot': binder.snapshot_assets(self.out)}))
         publisher.publish(self.github, self.out, 'map-data-navigation', navigation_data=True)
         manifest = json.loads(self.github.files['map-data-navigation']['manifest.json'])
         self.assertTrue(set(documents) <= manifest['files'].keys())
@@ -87,6 +93,58 @@ class PublisherTest(unittest.TestCase):
         self.assertEqual('source-inventory.json', manifest['source_inventory']['asset'])
         self.assertEqual(hashlib.sha256((self.out / 'source-inventory.json').read_bytes()).hexdigest(),
                          manifest['source_inventory']['sha256'])
+
+    def test_stale_quality_report_cannot_publish_changed_map_assets(self):
+        # Build a valid miniature navigation bundle without contacting GitHub.
+        self.prepare_navigation_sample()
+        (self.out / 'cameras-uk.json').write_text('{"elements": [{"id": 1}]}')
+        with self.assertRaisesRegex(ValueError, "differs from passed quality"):
+            publisher.publish(self.github, self.out, 'map-data-tampered', navigation_data=True)
+        self.assertEqual([], self.github.actions)
+
+    def test_bare_pass_quality_report_no_longer_authorizes_release(self):
+        self.prepare_navigation_sample()
+        (self.out / 'build-quality.json').write_text(json.dumps({'errors': []}))
+        with self.assertRaisesRegex(ValueError, "quality asset snapshot"):
+            publisher.publish(self.github, self.out, 'map-data-stale', navigation_data=True)
+        self.assertEqual([], self.github.actions)
+
+    def test_added_valid_region_after_quality_report_blocks_release(self):
+        self.prepare_navigation_sample()
+        (self.out / 'lanes-107_-5.json').write_text('{"ways": []}')
+        with self.assertRaisesRegex(ValueError, "inventory changed"):
+            publisher.publish(self.github, self.out, 'map-data-extra', navigation_data=True)
+        self.assertEqual([], self.github.actions)
+
+    def prepare_navigation_sample(self):
+        # The real map workflow writes this immediately before publication.
+        for name, data in {
+            'limits-106_-5.json': {'ways': []},
+            'roadinfo-106_-5.json': {'elements': []},
+            'charge-zones-uk.json': {'zones': []},
+        }.items():
+            (self.out / name).write_text(json.dumps(data))
+        with gzip.open(self.out / 'search-offline-uk.tsv.gz', 'wt') as stream:
+            stream.write('#drivemate-search-offline\\t1\\t2026-10-09\\tSynthetic credits\\n'
+                         'sw1a1aa\\tP\\t\\tLondon\\t51.5\\t-0.1\\n')
+        spec = importlib.util.spec_from_file_location(
+            'source_inventory', Path(__file__).resolve().parents[1] / 'scripts/source_inventory.py')
+        inventory = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inventory)
+        source_file = self.out.parent / 'synthetic.osm.pbf'
+        source_file.write_bytes(b'synthetic source')
+        inputs = {k: self.out.parent / (k + '.missing')
+                  for k in inventory.SOURCES if k != 'osm_uk'}
+        provenance = inventory.build(
+            source_file,
+            'https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf', inputs)
+        (self.out / 'source-inventory.json').write_text(json.dumps(provenance))
+        spec = importlib.util.spec_from_file_location(
+            'publication_consistency', Path(__file__).resolve().parents[1] / 'scripts/publication_consistency.py')
+        binder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(binder)
+        (self.out / 'build-quality.json').write_text(json.dumps({
+            'errors': [], 'asset_snapshot': binder.snapshot_assets(self.out)}))
 
     def test_missing_navigation_datasets_stop_before_upload(self):
         with self.assertRaisesRegex(ValueError, 'navigation datasets missing'):

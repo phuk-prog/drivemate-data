@@ -6,6 +6,7 @@ import json
 import sys
 from coverage_audit import audit as audit_coverage
 from source_inventory import read as read_source_inventory
+from publication_consistency import snapshot_assets
 
 out = Path(sys.argv[1])
 previous_path = Path(sys.argv[2]) if len(sys.argv) > 2 else None
@@ -121,6 +122,7 @@ report = {
     "version": 1,
     "metrics": metrics,
     "nation_tile_probes": regional_coverage,
+    "asset_snapshot": snapshot_assets(out),
     "errors": errors,
     "warnings": warnings,
 }
