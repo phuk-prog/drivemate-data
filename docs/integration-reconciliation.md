@@ -64,3 +64,25 @@ completeness, address coverage, route legal validity, or verified road-level
 information. Fully validating those requires external independent reference
 data, ground-truth cases and routing topology audits. No new UK-wide data
 build or production publication is implied by these source checks.
+
+## Road-seam continuity and offline graph samples — 9 October 2026
+
+`grid_tiles.tiles_for_polyline()` now assigns existing lane and speed-limit
+geometries to every half-degree square touched by every line segment,
+including intermediate squares with **no vertices** and geometric border
+cases. Previous code indexed only line vertices and could omit a long
+crossing segment from an intervening download region. Both writers use the
+same geometry helper; focused source tests cover skipped cells, negative
+longitudes, reversal, exact borders and corner crossings.
+
+The Valhalla UK routing workflow retains the original six **blocking** route
+smoke checks. Additional north/south and cross-region sample journeys now
+produce a diagnostic JSON report during real graph builds. An unsuccessful
+extra diagnostic probe is logged for investigation, not used to fabricate
+legal turns or automatically edit the map. Source-regression tests validate
+diagnostic logic using synthetic route responses; **no new full UK graph
+build is claimed by these tests**.
+
+Caution: complete OSM node connectivity, junction legality, turn restrictions,
+physical lanes and every region border require independent comprehensive
+audits; geometric tile continuity and sample routes do not prove them.

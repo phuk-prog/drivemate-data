@@ -363,6 +363,13 @@ jobs:
           raise SystemExit(1 if bad else 0)
           PY
 
+      - name: Survey extra UK road connections (diagnostics, never invented turns)
+        run: |
+          mkdir -p work/empty
+          work/vh/bin/python scripts/routing_connectivity.py \
+            --graph work/uk.tar --report work/routing-connectivity.json
+          cat work/routing-connectivity.json >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish the road graph
         env:
           GH_TOKEN: ${{ github.token }}

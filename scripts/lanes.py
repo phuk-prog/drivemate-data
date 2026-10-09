@@ -7,6 +7,8 @@ import json
 import os
 import sys
 
+from grid_tiles import tiles_for_polyline
+
 KEEP = [
     "lanes", "lanes:forward", "lanes:backward",
     "turn:lanes", "turn:lanes:forward", "turn:lanes:backward",
@@ -50,11 +52,10 @@ if dst.endswith(".json"):
 else:
     # Split into squares of half a degree (about 55 x 35 km), so the app only fetches the
     # squares along your route: lanes-<row>_<col>.json, row = floor(lat*2), col = floor(lon*2).
-    import math
     os.makedirs(dst, exist_ok=True)
     squares = {}
     for w in ways:
-        keys = {(math.floor(c[1] * 2), math.floor(c[0] * 2)) for c in w["g"]}
+        keys = tiles_for_polyline(w["g"], 2)
         for k in keys:
             squares.setdefault(k, []).append(w)
     for (row, col), items in squares.items():

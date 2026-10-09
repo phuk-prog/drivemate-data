@@ -53,6 +53,8 @@ import time
 import urllib.error
 import urllib.request
 
+from grid_tiles import tiles_for_polyline
+
 MPH = 1.609344
 UK_MPH = {10, 15, 20, 30, 40, 50, 60, 70}   # values a UK speed-limit sign can show
 NEAR_M = 20.0          # a sign this close to the road's line stands beside it
@@ -480,7 +482,8 @@ def build(src, out_dir, motorways_src=None, checks_path=None, roads=None, cache_
     squares = {}
 
     def file_way(kmh, pts, src_code, key="ways"):
-        for k in {f"{math.floor(p[1] * 2)}_{math.floor(p[0] * 2)}" for p in pts}:
+        for row, col in tiles_for_polyline(pts, 2):
+            k = f"{row}_{col}"
             sq = squares.setdefault(k, {"ways": [], "src": [], "dir": []})
             if key == "ways":
                 sq["ways"].append([round(kmh, 1), pts])
