@@ -21,7 +21,6 @@ concurrency:
 
 env:
   REGION: europe/united-kingdom
-  TAG: map-data-uk
 
 jobs:
   build:
@@ -113,19 +112,12 @@ jobs:
           python3 scripts/places.py out/places --overture work/places.parquet --osm work/pois.geojsonseq --osnames work/osnames
           ls out/places | wc -l; du -sh out/places
 
-      - name: Publish the map files
+      - name: Verify publication rules
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Publish a complete immutable generation, then update the pointer
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Map data: UK" \
-            --notes "DriveMate's own map files, rebuilt weekly from OpenStreetMap (© OpenStreetMap contributors, ODbL)." --prerelease
-          # One file at a time, each retried: big batches of uploads can be cut off part-way.
-          up() { for i in 1 2 3 4 5; do gh release upload "$TAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
-          failed=0
-          up out/drivemate.pmtiles || failed=1
-          for f in out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz; do up "$f" || failed=1; done
-          [ $failed = 0 ] || exit 1
-          {
-            echo "## Map data built"
-            echo "Map file: $(du -h out/drivemate.pmtiles | cut -f1) · lane squares: $(ls out/lanes | wc -l) ($(du -sh out/lanes | cut -f1)) · place squares: $(ls out/places | wc -l) ($(du -sh out/places | cut -f1))"
-          } >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/publish_map_data.py publish --repo phuk-prog/drivemate-data \
+            --tag "map-data-$(date -u +%Y%m%d)-r${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" --out out
