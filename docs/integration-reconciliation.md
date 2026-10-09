@@ -107,3 +107,25 @@ graph or the Android app. These are diagnostics, not evidence of all UK
 road-connected components, legal turn permissions, individual lane links,
 restriction relations, or updated ground truth. No production graph build
 or road-data correction is claimed until independently run and checked.
+
+## Sampled OSM turn restriction relations — development, diagnostic only
+
+`scripts/restriction_audit.py` now parses OSM `type=restriction` relations
+from Osmium OPL alongside road way/node reference lists. For a **simple
+via-node relation**, it checks that the referenced approach and exit ways
+contain the via node and flags suspicious explicit-one-way orientation.
+For **via-way relations**, it checks whether the from/via/to ways actually
+share OSM nodes, without assuming a visible geometric crossing is a junction.
+It also records unknown/missing references, conditional restrictions, vehicle
+exceptions and complex formats; none is automatically treated as a proven
+illegal turn. Valid cul-de-sacs or separate bridge levels are not fabricated
+as new road connections.
+
+The next full UK map workflow adds **Manchester and Belfast** relation
+diagnostics using Osmium smart extracts configured to complete
+`type=restriction` relation members. JSON reports stay in the build workspace;
+only summaries appear in the workflow output. Source unit tests use synthetic
+OPL records. Passing source CI is **not evidence** of the actual UK relation
+results, Valhalla's interpretation, real-world road signs, or legally permitted
+routes. A full graph build and targeted driving-route verification are required
+before considering any changes to live routing behavior.

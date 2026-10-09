@@ -135,6 +135,31 @@ jobs:
           PY
           done
 
+      - name: Examine sampled turn restrictions without creating illegal junction turns
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/restrictions
+          for area in manchester belfast; do
+            case "$area" in
+              manchester) bbox="-2.32,53.45,-2.17,53.53" ;;
+              belfast) bbox="-6.02,54.56,-5.84,54.64" ;;
+            esac
+            # Smart extraction retains restriction relation members which a
+            # basic complete-ways-only regional extract cannot guarantee.
+            osmium extract -s smart -S types=restriction -b "$bbox" work/base.osm.pbf \
+              -o "work/restrictions/${area}.osm.pbf" --overwrite
+            osmium tags-filter -R "work/restrictions/${area}.osm.pbf" w/highway \
+              -f opl,add_metadata=false -o "work/restrictions/${area}-roads.opl" --overwrite
+            osmium tags-filter -R "work/restrictions/${area}.osm.pbf" r/type=restriction \
+              -f opl,add_metadata=false -o "work/restrictions/${area}-relations.opl" --overwrite
+            python3 scripts/restriction_audit.py \
+              --ways "work/restrictions/${area}-roads.opl" \
+              --relations "work/restrictions/${area}-relations.opl" \
+              --region "$area" --report "work/restrictions/${area}-report.json" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
       - name: Painted lane arrows from street photos (Mapillary), where the map has none
         env:
           GH_TOKEN: ${{ github.token }}
