@@ -1,4 +1,4 @@
-"""Desktop Valhalla baseline using DriveMate's existing Manchester graph.
+"""Desktop Valhalla baseline using Manchester or an explicitly identified graph.
 
 Public landmark endpoints are synthetic test inputs, not recorded driving traces.
 Requires pyvalhalla==3.6.3. This does not validate Android JNI, legal ground truth,
@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import platform
 import resource
+import re
 import statistics
 import tempfile
 import time
@@ -25,15 +26,31 @@ CASES = {
 }
 
 
-def benchmark(tilepack, repeats):
+def graph_identity(document=None):
+    if document is None:
+        return {'engine': 'valhalla-3.6.3', 'sha256': GRAPH_SHA256, 'bytes': 99_502_080}
+    if not isinstance(document, dict) or document.get('engine') != 'valhalla-3.6.3':
+        raise ValueError('Unsupported graph engine')
+    sha, size = document.get('sha256'), document.get('bytes')
+    if not isinstance(sha, str) or not re.fullmatch('[0-9a-f]{64}', sha):
+        raise ValueError('Invalid graph SHA-256')
+    if type(size) is not int or not 0 < size <= 64 * 1024**3:
+        raise ValueError('Invalid graph size')
+    return document
+
+
+def benchmark(tilepack, repeats, manifest=None):
     import valhalla
     if importlib.metadata.version('pyvalhalla') != '3.6.3':
         raise ValueError('Benchmark requires pyvalhalla 3.6.3')
     if not 3 <= repeats <= 100:
         raise ValueError('Use 3..100 repeats')
+    identity = graph_identity(manifest)
     report = {'scope': 'desktop native offline routing, not Android or legal correctness',
               'python': platform.python_version(), 'platform': platform.platform(),
-              'pyvalhalla': '3.6.3', 'graph_sha256': GRAPH_SHA256, 'cases': {}}
+              'pyvalhalla': '3.6.3', 'graph_sha256': identity['sha256'], 'cases': {}}
+    if manifest is not None:
+        report['published_graph_manifest'] = identity
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         graph = root / 'tiles.tar'
@@ -43,12 +60,12 @@ def benchmark(tilepack, repeats):
         with gzip.open(tilepack, 'rb') as source, graph.open('wb') as destination:
             while block := source.read(256 * 1024):
                 size += len(block)
-                if size > 512 * 1024 * 1024:
-                    raise ValueError('Graph exceeds app decompression bound')
+                if size > identity['bytes']:
+                    raise ValueError('Graph exceeds declared decompression bound')
                 sha.update(block)
                 destination.write(block)
-        if sha.hexdigest() != GRAPH_SHA256:
-            raise ValueError('Graph checksum mismatch')
+        if size != identity['bytes'] or sha.hexdigest() != identity['sha256']:
+            raise ValueError('Graph checksum or size mismatch')
         report['unpack_verify_ms'] = 1000 * (time.perf_counter() - started)
         report['graph_bytes'] = size
         empty = root / 'empty'
@@ -87,8 +104,11 @@ def main():
     parser.add_argument('tilepack', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--repeats', type=int, default=7)
+    parser.add_argument('--graph-manifest', type=Path,
+                        help='Explicit published SHA-256/size/engine identity; default is the bundled Manchester graph')
     args = parser.parse_args()
-    report = benchmark(args.tilepack, args.repeats)
+    manifest = json.loads(args.graph_manifest.read_text()) if args.graph_manifest else None
+    report = benchmark(args.tilepack, args.repeats, manifest)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + '\n')
     print(json.dumps({name: row['warm_median_ms'] for name, row in report['cases'].items()}))

@@ -99,3 +99,57 @@ interpretation; building every class may increase disk and memory needs. A routi
 manual workflow input permits a serial UK trial without rebuilding unrelated map data.
 The official extract script is checksum pinned. The pyvalhalla wheel remains version
 pinned rather than digest pinned. No UK build or publication is claimed by source tests.
+
+### First UK graph and matched regional trials
+
+The routing-only [build 37969596182](https://github.com/phuk-prog/drivemate-data/actions/runs/37969596182)
+at `2eb066d54695d3dc575bd07c7b1eff8eac752f21` completed successfully. The map
+job was skipped. It published immutable generation
+`routing-uk-20261009-r37969596182-a1` and its verified compatibility pointer.
+Download size is 1,016,384,059 bytes; decoded graph size is 2,800,936,960 bytes.
+The downloaded chunk was independently hashed in this workspace and matched
+GitHub's asset digest and manifest. Full gzip decoding, size and graph SHA-256
+were verified again before benchmarking. The graph and source fingerprints,
+retrieval date and ODbL attribution are recorded in [uk-graph-baseline.json](uk-graph-baseline.json).
+
+All six desktop native workflow journeys passed: Stockport–Liverpool 66.0 km,
+Stockport–Sheffield 58.2 km, Manchester–Wrexham 91.1 km,
+Carlisle–Gretna 15.9 km, London–Cardiff 241.2 km and Belfast–Lisburn 16.3 km.
+These smoke checks establish successful requests at those endpoints, not every
+road, legal restriction, conditional access, lane or Android JNI behavior.
+
+The reusable routing benchmark now accepts an explicit published graph manifest,
+while its default remains the exact bundled Manchester graph. Both hashes and
+decoded sizes are mandatory; an arbitrary bigger graph cannot weaken the bounds.
+Four alternating fresh-process trials used identical four-landmark requests,
+seven repeats each, on Python 3.12 / pyvalhalla 3.6.3. Route summaries were
+deterministic per graph. Three cases had identical regional/UK distance and time
+summaries; Bolton–Stockport differed by five metres. This is not legal ground truth.
+
+| Metric (median across four trials) | Manchester graph | UK graph |
+| --- | ---: | ---: |
+| Decoded bytes | 99,502,080 | 2,800,936,960 |
+| Unpack + SHA verification | 805 ms | 22,808 ms |
+| Actor initialization | 20.9 ms | 29.2 ms |
+| Process peak RSS, including Python | 134,016 KiB | 149,678 KiB |
+| Manchester–Stockport warm median | 57.4 ms | 71.0 ms |
+| Stockport–Manchester warm median | 71.9 ms | 96.8 ms |
+| Airport–Manchester warm median | 42.1 ms | 48.7 ms |
+| Bolton–Stockport warm median | 74.0 ms | 75.9 ms |
+
+The larger graph did not require loading its entire byte size into process RSS.
+Absolute timings varied: the first UK actor initialization was 165 ms, and one
+UK reverse-route warm median reached 175 ms. CPU affinity, frequency, temperature
+and OS caches were not controlled. The full ranges/order and benchmark script
+fingerprint are in [uk-regional-comparison.json](uk-regional-comparison.json).
+These are desktop baselines, not Android performance, memory, battery or guidance
+measurements. They support retaining the native engine provisionally; Android UK
+route/recalculation and recovery must still be tested.
+
+Reproduce after downloading and checking the immutable generation's chunk and
+manifest:
+
+```sh
+python scripts/benchmark_offline_routes.py uk.tilepack result.json \
+  --graph-manifest routing-uk.json --repeats 7
+```
