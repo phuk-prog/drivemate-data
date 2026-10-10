@@ -27,10 +27,12 @@ build only after its pieces have uploaded and six test journeys across the UK ha
 
 Sources and licences:
 - © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/)
-- [Overture Maps](https://overturemaps.org) places (CDLA Permissive 2.0 / ODbL as published)
+- [Overture Maps](https://overturemaps.org) places (CDLA-Permissive-2.0 / Apache-2.0, including Foursquare data), merged with OpenStreetMap points (ODbL) and OS Open Names (OGL)
 - Painted lane arrows and speed-limit signs: [Mapillary](https://www.mapillary.com) contributors. Imagery licensing alone does not establish permission to redistribute API detections or derived routing data; applicable derivative-data terms require separate review.
 - Contains OS data © Crown copyright and database right (OS Open Names, Open Government Licence); Contains Royal Mail data © Royal Mail copyright and database right; Contains National Statistics data © Crown copyright and database right
 - Congestion Charge and ULEZ boundaries: contains Transport for London data (London Datastore, Open Government Licence v2)
+
+Full licence texts and exact credit lines: [licenses/NOTICE.md](licenses/NOTICE.md).
 
 Source licence declarations are preliminary. `source-inventory.json` records observed
 files and fingerprints, not legal clearance or complete feature provenance. Optional
@@ -86,3 +88,9 @@ The painted-arrow and speed-limit-sign steps need a free Mapillary key as the re
 National Highways (checked Oct 2026) has no free download of permanent speed limits (its open
 Network Model has none; its keyed APIs cover only roadworks limits and roadside features), so
 nothing is taken from it.
+
+## Licences
+
+Licence texts (ODbL 1.0, CDLA-Permissive-2.0, Apache-2.0, the Foursquare notice) and every required
+credit line are in [licenses/NOTICE.md](licenses/NOTICE.md). Each map-data release carries them as
+assets (`LICENSE-*.txt`, `NOTICE-Foursquare.txt`, `NOTICE.md`).

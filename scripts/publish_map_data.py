@@ -20,6 +20,9 @@ MIN_MAP_BYTES = 50_000_000
 MAX_ASSET_BYTES = 1_950_000_000
 NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,150}')
 TAG = re.compile(r'map-data-[A-Za-z0-9][A-Za-z0-9._-]{0,100}')
+LICENSE_DIR = Path(__file__).resolve().parent.parent / 'licenses'
+LICENSE_ASSETS = ('LICENSE-ODbL.txt', 'LICENSE-CDLA-Permissive-2.0.txt', 'LICENSE-Apache-2.0.txt',
+                  'NOTICE-Foursquare.txt', 'NOTICE.md')
 REPO = re.compile(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+')
 
 
@@ -168,7 +171,7 @@ def local_files(out):
                          'charge-zones-uk.json', 'search-offline-uk.tsv.gz',
                          'build-quality.json', 'build-quality.md', 'limit-checks.md',
                          'mapillary-arrows-cache.json.gz', 'mapillary-signs-cache.json.gz',
-                         'source-inventory.json', places_provenance.FILENAME} or
+                         'source-inventory.json', places_provenance.FILENAME, *LICENSE_ASSETS} or
                 re.fullmatch(r'(?:lanes|limits|roadinfo)--?\d+_-?\d+\.json', name) or
                 PLACE_TILE.fullmatch(name) or
                 regional.is_regional_asset(name)):
@@ -237,6 +240,20 @@ def local_files(out):
     return files
 
 
+def licence_files(directory=None):
+    """Licence texts always come from the repository folder, never from build output."""
+    directory = Path(directory or LICENSE_DIR)
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError('Licence folder missing or unsafe')
+    result = {}
+    for name in LICENSE_ASSETS:
+        path = directory / name
+        if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= MAX_ASSET_BYTES:
+            raise ValueError(f'Licence file missing or unsafe: {name}')
+        result[name] = path
+    return result
+
+
 def verify_inventory(assets, expected, tag, exact=False):
     if exact and set(assets) != set(expected):
         raise ValueError('Immutable release inventory differs')
@@ -302,7 +319,7 @@ def pointer(github, tag, manifest_tag, manifest_path, directory, extra_tag=None)
         raise
 
 
-def publish(github, out, tag, extra_tag=None, navigation_data=False):
+def publish(github, out, tag, extra_tag=None, navigation_data=False, licenses_dir=None):
     checked_tag(tag)
     extra_tag = checked_tag(extra_tag or tag + '-extra')
     if tag == LEGACY or tag == extra_tag or extra_tag == LEGACY:
@@ -323,6 +340,9 @@ def publish(github, out, tag, extra_tag=None, navigation_data=False):
         consistency = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(consistency)
         consistency.verify_snapshot(out, consistency.read_report(files['build-quality.json']))
+    if navigation_data:
+        # Checked after the snapshot comparison: these are not build output.
+        files.update(licence_files(licenses_dir))
     # Keep the map and build metadata in the main release; stable ordering for restartability.
     names = sorted(files, key=lambda name: (name != 'drivemate.pmtiles', name != 'build-info.txt', name))
     main = {name: files[name] for name in names[:MAIN_FILES]}

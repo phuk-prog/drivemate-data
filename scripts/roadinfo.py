@@ -9,7 +9,7 @@ Usage: roadinfo.py roadinfo.geojsonseq out_dir [--min-elements N]
 
 Writes out_dir/roadinfo-<floor(lat*2)>_<floor(lon*2)>.json shaped like a map-server (Overpass)
 answer, so the app's existing reader (RoadAlerts.parseFile) reads it unchanged:
-  {"source": "© OpenStreetMap contributors (ODbL)", "elements": [
+  {"source": "© OpenStreetMap contributors, ODbL 1.0 https://opendatacommons.org/licenses/odbl/1-0/", "elements": [
      {"type": "node", "id": 1, "lat": 53.4, "lon": -2.1, "tags": {...}},
      {"type": "way", "id": 2, "center": {"lat": 53.4, "lon": -2.1}, "tags": {...}}, ...]}
 Same choice of things as the app's live question:
@@ -25,7 +25,7 @@ import os
 import re
 import sys
 
-SOURCE = "© OpenStreetMap contributors (ODbL)"
+SOURCE = "© OpenStreetMap contributors, ODbL 1.0 https://opendatacommons.org/licenses/odbl/1-0/"
 EDGE = 0.002
 KEEP = ("traffic_calming", "hazard", "highway", "railway", "barrier", "maxspeed",
         "amenity", "shop", "name", "brand", "direction")

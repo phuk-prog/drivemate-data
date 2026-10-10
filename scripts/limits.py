@@ -9,7 +9,7 @@ Sources:
   1. OpenStreetMap maxspeed on roads (osmium tags-filter w/maxspeed, then osmium export
      -f geojsonseq --geometry-types=linestring -u type_id).
   2. Where OpenStreetMap has no limit: UK speed-limit signs spotted in Mapillary street photos
-     (map features "regulatory--maximum-speed-limit-<mph>--g<n>", CC BY-SA 4.0), only with
+     (map features "regulatory--maximum-speed-limit-<mph>--g<n>"; licence under review), only with
      --roads (the lane step's roads file: osmium export -a type,id). Rules — never a guess:
        - a sign counts only for the road it stands beside (within 20 m, nearest road going the
          way the sign faces; skipped if another road is about as close) and only for traffic
@@ -63,8 +63,8 @@ MAX_AGE_S = 5 * 365 * 86400
 REFRESH_S = 56 * 86400
 TILE_LAT, TILE_LON = 0.09, 0.1       # Mapillary search boxes must be under 0.01 square degrees
 SIGN_RE = re.compile(r"^regulatory--maximum-speed-limit-(\d+)--g\d+$")
-OSM_CREDIT = "© OpenStreetMap contributors (ODbL)"
-SIGN_CREDIT = "speed-limit signs from Mapillary (CC BY-SA 4.0)"
+OSM_CREDIT = "© OpenStreetMap contributors, ODbL 1.0 https://opendatacommons.org/licenses/odbl/1-0/"
+SIGN_CREDIT = "speed-limit signs from Mapillary (see https://www.mapillary.com/terms; use pending licence review)"
 # Wales, roughly (the England border to within a few km; the coast pushed out to sea). Only used
 # to pick which 30 mph roads to check against 20 mph signs and to head the report.
 WALES = [(-3.32, 53.40), (-3.10, 53.27), (-2.93, 53.19), (-2.92, 53.10), (-2.76, 53.01), (-2.70, 52.96),

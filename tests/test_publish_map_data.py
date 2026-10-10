@@ -105,6 +105,32 @@ class PublisherTest(unittest.TestCase):
         self.assertEqual(hashlib.sha256((self.out / 'source-inventory.json').read_bytes()).hexdigest(),
                          manifest['source_inventory']['sha256'])
         self.assertIn('places-provenance.json', manifest['files'])
+        repo = Path(__file__).resolve().parents[1] / 'licenses'
+        for name in publisher.LICENSE_ASSETS:
+            self.assertEqual(hashlib.sha256((repo / name).read_bytes()).hexdigest(),
+                             manifest['files'][name]['sha256'])
+            self.assertIn(name, self.github.files['map-data-navigation'])
+
+    def test_navigation_publish_requires_licence_files_before_upload(self):
+        self.prepare_navigation_sample()
+        with tempfile.TemporaryDirectory() as empty:
+            with self.assertRaisesRegex(ValueError, 'Licence file missing'):
+                publisher.publish(self.github, self.out, 'map-data-nolicence',
+                                  navigation_data=True, licenses_dir=empty)
+        self.assertEqual([], self.github.actions)
+
+    def test_licence_files_come_from_repo_not_build_output(self):
+        self.prepare_navigation_sample()
+        (self.out / 'NOTICE.md').write_text('tampered')
+        binder_path = Path(__file__).resolve().parents[1] / 'scripts/publication_consistency.py'
+        spec = importlib.util.spec_from_file_location('publication_consistency', binder_path)
+        binder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(binder)
+        (self.out / 'build-quality.json').write_text(json.dumps({
+            'errors': [], 'asset_snapshot': binder.snapshot_assets(self.out)}))
+        publisher.publish(self.github, self.out, 'map-data-licence-source', navigation_data=True)
+        repo = Path(__file__).resolve().parents[1] / 'licenses' / 'NOTICE.md'
+        self.assertEqual(repo.read_bytes(), self.github.files['map-data-licence-source']['NOTICE.md'])
 
     def test_navigation_publish_requires_places_provenance_sidecar(self):
         self.prepare_navigation_sample()

@@ -14,7 +14,7 @@ Anything else is left alone.
 
 Mapillary's answers are kept between weekly runs (cache file) so each week only the oldest or
 missing junctions are fetched again. The key comes from the MAPILLARY_TOKEN environment variable
-and is never printed. Mapillary data: CC BY-SA 4.0 (credited in the lane files' "source").
+and is never printed. Mapillary data: licence under review (credited in the lane files' "source").
 """
 import concurrent.futures
 import gzip
@@ -33,7 +33,7 @@ LANE_W = 3.5           # typical UK lane width
 GAP_M = 1.8            # arrows further apart than this sideways are in different lanes
 MAX_AGE_S = 6 * 365 * 86400   # ignore arrows not seen for six years
 REFRESH_S = 28 * 86400        # fetch each junction again after four weeks
-SOURCE_NOTE = "lane arrows partly from Mapillary (CC BY-SA 4.0)"
+SOURCE_NOTE = "lane arrows partly from Mapillary (see https://www.mapillary.com/terms; use pending licence review)"
 
 # Direction words: OpenStreetMap's, and the order they sit in across the road (left to right).
 RANK = {"left": 0, "slight_left": 0, "through": 1, "slight_right": 2, "right": 2, "reverse": 3}
