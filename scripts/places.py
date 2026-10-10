@@ -14,7 +14,11 @@ per-source counts after merging, the Overture release when known, and the licenc
 obligations recorded in docs/source-rights-review.md. The tile format above is unchanged.
 
 Usage: places.py out_dir [--overture places.parquet] [--overture-release 2026-09-17.0]
-                         [--osm pois.geojsonseq] [--osnames dir]
+                         [--osm pois.geojsonseq] [--osm-addresses addresses.geojsonseq] [--osnames dir]
+
+--osm-addresses: OSM features with addr:housenumber + addr:street become records
+["<number> <street>", "address", "<locality>, <postcode>", lat, lon]. They are de-duplicated
+among themselves (same name within ~30 m) and never merged with, or displace, POIs.
 """
 import argparse
 import csv
@@ -32,6 +36,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("out")
 ap.add_argument("--overture")
 ap.add_argument("--osm")
+ap.add_argument("--osm-addresses", dest="osm_addresses")
 ap.add_argument("--osnames")
 ap.add_argument("--overture-release", default=None,
                 help="Overture release identifier (e.g. 2026-09-17.0); recorded as 'unknown' if omitted")
@@ -133,6 +138,38 @@ if args.osm and os.path.exists(args.osm):
                 p.get("addr:city"), p.get("addr:postcode")) if x)
             add("osm", name, kind, addr, lat, lon)
 
+# ---------- OpenStreetMap house numbers (addr:housenumber + addr:street) ----------
+def clean(v):
+    return " ".join(v.split()) if isinstance(v, str) else ""
+
+
+if args.osm_addresses and os.path.exists(args.osm_addresses):
+    with open(args.osm_addresses, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip().lstrip("\x1e")
+            if not line:
+                continue
+            feat = json.loads(line)
+            p = feat.get("properties") or {}
+            number, street = clean(p.get("addr:housenumber")), clean(p.get("addr:street"))
+            if not number or not street:
+                continue
+            g = feat.get("geometry") or {}
+            coords = g.get("coordinates")
+            try:
+                if g.get("type") == "Point":
+                    lon, lat = coords
+                else:
+                    ring = coords[0][0] if g.get("type") == "MultiPolygon" else coords[0]
+                    lon = sum(c[0] for c in ring) / len(ring)
+                    lat = sum(c[1] for c in ring) / len(ring)
+            except (TypeError, ValueError, IndexError, ZeroDivisionError):
+                continue
+            place = next((clean(p.get(k)) for k in ("addr:city", "addr:town", "addr:village", "addr:suburb", "addr:hamlet")
+                          if clean(p.get(k))), "")
+            addr = ", ".join(x for x in (place, clean(p.get("addr:postcode"))) if x)
+            add("osm_addresses", f"{number} {street}", "address", addr, lat, lon)
+
 # ---------- Ordnance Survey Open Names (streets and places) ----------
 if args.osnames and os.path.isdir(args.osnames):
     from pyproj import Transformer
@@ -170,6 +207,8 @@ by_primary = {}       # kept records by source (sums to total)
 dataset_records = {}  # kept Overture records per distinct upstream dataset
 for (row, col), items in squares.items():
     # Same name within ~80 m = the same place: keep the one with the fullest address.
+    addresses = [x for x in items if x[5] == "osm_addresses"]
+    items = [x for x in items if x[5] != "osm_addresses"]
     items.sort(key=lambda x: -len(x[2]))
     kept = []
     seen = {}
@@ -194,6 +233,18 @@ for (row, col), items in squares.items():
         by_primary[it[5]] = by_primary.get(it[5], 0) + 1
         for dataset in it[6]:
             dataset_records[dataset] = dataset_records.get(dataset, 0) + 1
+    # House numbers: same name within ~30 m is one address (fullest address wins). Separate
+    # from the POI pass above so addresses never displace or merge with POIs.
+    addresses.sort(key=lambda x: -len(x[2]))
+    seen_addr = set()
+    for it in addresses:
+        n = norm(it[0])
+        cy, cx = round(it[3] * 3600), round(it[4] * 2200)  # ~30 m cells
+        if any((n, cy + dy, cx + dx) in seen_addr for dy in (-1, 0, 1) for dx in (-1, 0, 1)):
+            continue
+        seen_addr.add((n, cy, cx))
+        kept.append(it[:5])
+        by_primary["osm_addresses"] = by_primary.get("osm_addresses", 0) + 1
     total += len(kept)
     with gzip.open(os.path.join(args.out, f"places-{row}_{col}.json.gz"), "wt", encoding="utf-8") as f:
         json.dump(kept, f, separators=(",", ":"))

@@ -17,7 +17,7 @@ SCHEMA = 1
 FILENAME = 'places-provenance.json'
 KIND = 'drivemate-places-provenance'
 RIGHTS_REVIEW_STATUS = 'not_independently_verified'
-SOURCE_IDS = ('overture', 'osm', 'osnames')
+SOURCE_IDS = ('overture', 'osm', 'osm_addresses', 'osnames')
 UNKNOWN = 'unknown'
 UNAVAILABLE = 'unavailable'
 OVERTURE_RELEASE = re.compile(r'\d{4}-\d{2}-\d{2}\.\d+')
@@ -34,6 +34,18 @@ SOURCES = {
             'share-alike/source-access obligations.',
             'Preserve source fingerprints and make the derivative database/licence '
             'available where required; rendered map attribution remains necessary.',
+        ],
+        'evidence': ['https://www.openstreetmap.org/copyright',
+                     'https://opendatacommons.org/licenses/odbl/1-0/'],
+    },
+    'osm_addresses': {
+        'label': 'OpenStreetMap house numbers',
+        'licence': 'ODbL-1.0',
+        'attribution': '© OpenStreetMap contributors',
+        'obligations': [
+            'Same ODbL attribution and share-alike obligations as the OpenStreetMap source.',
+            'Only addr:housenumber + addr:street (with addr:city/postcode where tagged) are used; '
+            'nothing is invented, so coverage follows what mappers have entered.',
         ],
         'evidence': ['https://www.openstreetmap.org/copyright',
                      'https://opendatacommons.org/licenses/odbl/1-0/'],
