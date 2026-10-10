@@ -56,3 +56,32 @@ Statistics notice wording; it does not give per-record lineage inside the tiles;
 and per-dataset counts reflect what the Overture input declares, not verified
 upstream ownership. The publication blockers above remain until those obligations
 are reviewed and satisfied.
+
+## Northern Ireland postcode and street search — research, 10 October 2026
+
+Research from primary sources, not legal clearance. Items marked UNVERIFIED
+could not be confirmed from a primary source.
+
+| Source | NI content | Offline redistribution in the app | Decision |
+|---|---|---|---|
+| ONSPD / NSPL (ONS), BT rows | Postcode centroids from LPS Pointer | **Not allowed.** ONS: "If you also use the Northern Ireland data (postcodes starting with "BT"), you need a separate licence for commercial use direct from Land and Property Services"; the linked LPS End User Licence (Oct 2011) permits "your own internal business use… all other uses are prohibited". | Do not bundle |
+| postcodes.io | Serves the same ONSPD BT rows | Same restriction as ONSPD | Do not bundle; current online lookups need LPS confirmation before any commercial release |
+| Code-Point Open (OS) | GB only | n/a | No NI value |
+| [OSNI Open Data – Gazetteer – Streetnames](https://admin.opendatani.gov.uk/dataset/osni-open-data-gazetteer-streetnames) | All NI street names with Irish Grid coordinates; no postcodes or addresses | Allowed under OGL v3 per data.gov.uk listing and LPS statement ("including it in your own product or application") | **Use**, with attribution: "Contains LPS Intellectual Property © Crown copyright and database right (year) This information is licensed under the terms of the Open Government Licence" |
+| OSNI Open Data – Gazetteer – Place Names | 336 towns/villages (label points) | OGL | Use, with the same attribution |
+| OpenStreetMap `addr:postcode` in NI | Non-authoritative, coverage UNVERIFIED | ODbL with attribution | Fallback only, labelled as non-authoritative |
+| LPS Pointer, NISRA Central Postcode Directory, paid Code-Point | Addresses / postcodes | Licensed / restricted | Do not use |
+
+Open questions that need **written** confirmation from LPS
+(mapping.helpdesk@finance-ni.gov.uk) before acting:
+1. Whether BT postcode centroids may be shipped in a free or Play Store app.
+2. That an HSENI note saying OSNI mapping is exempt from OGL does not apply
+   to the OGL-marked gazetteers.
+
+Not verified here: OpenDataNI returned 403, so the gazetteer's field names,
+record count and currency (resources dated 2015–2021) are UNVERIFIED. A newer
+LPS licence (January 2026) was seen only on a secondary site.
+
+Recommended next step: add the OSNI street and place gazetteers to offline search
+(converting Irish Grid EPSG:29902/29903 to WGS84), keeping their attribution.
+Do this once a GitHub runner can download them.
