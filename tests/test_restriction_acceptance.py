@@ -80,9 +80,17 @@ class EngineLimitationTests(unittest.TestCase):
         report = run([rel(30, members(SOUTH, SOUTH), restriction="only_u_turn")], ignoring)
         self.assertEqual(0, report["counts"]["fail"])
         self.assertEqual(1, report["counts"]["engine_unsupported"])
+        self.assertEqual(1, report["known_routing_safety_blockers"])
         self.assertEqual(30, report["engine_unsupported"][0]["relation"])
-        self.assertTrue(report["accepted"])
+        self.assertFalse(report["accepted"])  # unsupported is a safety blocker, not accepted
         self.assertIn("only_u_turn", ra.summary_markdown(report))
+        # The graph-builder limitation persists even when all probes find no
+        # route, otherwise a real but untested only_u_turn could disappear.
+        unroutable = run([rel(32, members(SOUTH, SOUTH), restriction="only_u_turn")],
+                         FakeRouter({}))
+        self.assertEqual(1, unroutable["counts"]["engine_unsupported"])
+        self.assertEqual(0, unroutable["counts"]["no_route"])
+        self.assertFalse(unroutable["accepted"])
         # An ordinary restriction failing alongside it still rejects the run.
         both = run([rel(30, members(SOUTH, SOUTH), restriction="only_u_turn"), rel(31, members())],
                    FakeRouter({**DIRECT, NORTH: [edge(SOUTH, 2), edge(NORTH, 4)],
@@ -98,10 +106,32 @@ class NoTurnTests(unittest.TestCase):
         self.assertTrue(report["accepted"])
         self.assertEqual([], report["failures"])
 
+    def test_short_driveway_near_and_far_destinations_preserve_violation(self):
+        road = ra.load_ways([
+            way(SOUTH, [1, 2], oneway="yes"),
+            way(EAST, [2, 3], highway="service", service="driveway", oneway="yes"),
+        ])
+        class TerminalEdgeRouter(ra.Router):
+            def route(self, start, end):
+                # Near-endpoint routing is different; illegal far endpoint still fails.
+                if ra.haversine(VIA, (end.lat, end.lon)) < 38.0:
+                    return None
+                return [edge(SOUTH, 2), edge(EAST, 3)]
+        result = run([rel(14551046, members(), restriction="no_left_turn")],
+                     TerminalEdgeRouter(), road)
+        self.assertEqual(1, result["counts"]["fail"])
+        self.assertFalse(result["accepted"])
+        failure = result["failures"][0]
+        self.assertTrue(failure["target_way_context"]["two_node_driveway"])
+        self.assertEqual({0.35, 0.8}, {p["target_fraction"] for p in failure["probes"]})
+        self.assertEqual({"fail", "no_route"}, {p["status"] for p in failure["probes"]})
+        self.assertIn("two-node driveway probe positions", ra.summary_markdown(result))
+
     def test_no_right_turn_fails_on_direct_turn(self):
         report = run([rel(2, members())], FakeRouter(DIRECT))
         self.assertEqual(1, report["counts"]["fail"])
         self.assertFalse(report["accepted"])
+        self.assertEqual(1, report["known_routing_safety_blockers"])
         failure = report["failures"][0]
         self.assertEqual((2, "no_right_turn", SOUTH, 2, EAST), (
             failure["relation"], failure["restriction"], failure["from_way"],
@@ -172,12 +202,39 @@ class OnlyTurnTests(unittest.TestCase):
         self.assertEqual([EAST], [p["target_way"] for p in bad])
 
     def test_only_straight_on_mandated_route_and_detours_pass(self):
+        # A full PASS requires all four exits to have actual decoded routes.
+        # The previous fixture omitted SOUTH and WEST yet expected PASS.
+        legal_route = [edge(SOUTH, 2), edge(NORTH, 4)]
+        around = [edge(SOUTH, 2), edge(NORTH, 4), edge(NORTH, 2)]
         report = self.only({
-            NORTH: [edge(SOUTH, 2), edge(NORTH, 4)],
-            EAST: [edge(SOUTH, 2), edge(NORTH, 4), edge(20, 6), edge(21, 3), edge(EAST, 2)],
+            NORTH: legal_route,
+            EAST: [*around, edge(EAST, 3)],
+            SOUTH: [*around, edge(SOUTH, 1)],
+            WEST: [*around, edge(WEST, 5)],
         })
         self.assertEqual(1, report["counts"]["pass"])
         self.assertEqual(0, report["counts"]["fail"])
+        self.assertEqual(0, report["counts"]["inconclusive"])
+        self.assertEqual(0, report["counts"]["no_route"])
+
+    def test_only_turn_mixed_success_and_inconclusive_is_not_a_pass(self):
+        result = self.only({
+            NORTH: [edge(SOUTH, 2), edge(NORTH, 4)],
+            EAST: [edge(SOUTH, 2), edge(NORTH, 4), edge(20, 6), edge(21, 3), edge(EAST, 2)],
+            WEST: [edge(WEST, 2), edge(WEST, 5)],  # snapped onto another road
+            # SOUTH is unroutable; neither result is a verified pass.
+        })
+        self.assertEqual(0, result["counts"]["pass"])
+        self.assertEqual(1, result["counts"]["inconclusive"])
+        western_probe = next(p for p in result["inconclusive_examples"][0]["probes"]
+                             if p["target_way"] == WEST)
+        self.assertEqual("inconclusive", western_probe["status"])
+
+    def test_only_turn_mixed_success_and_no_route_is_not_a_pass(self):
+        result = self.only({NORTH: [edge(SOUTH, 2), edge(NORTH, 4)]})
+        self.assertEqual(0, result["counts"]["pass"])
+        self.assertEqual(1, result["counts"]["no_route"])
+        self.assertEqual(0, result["counts"]["fail"])
 
     def test_only_probes_every_other_exit_including_u_turn(self):
         router = FakeRouter({})

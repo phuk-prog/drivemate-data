@@ -176,6 +176,7 @@ class Probe:
     start: Point
     end: Point
     forbidden: bool  # True: the direct manoeuvre into target_way is prohibited.
+    target_fraction: float = 0.8  # Diagnostic destination distance along the target leg.
 
 
 @dataclass
@@ -346,20 +347,31 @@ def build_case(relation, ways, coords, node_ways):
             found.append(leg)
         return found
 
-    def probe(way_id, leg, forbidden):
+    def probe(way_id, leg, forbidden, fraction=0.8):
         pts = [coords[n] for n in leg]
         total = length(pts)
         if total < MIN_LEG_METRES:
             return None
         target = 70.0 if way_id == from_way else 40.0
-        along = walk(pts, min(target, total * 0.8))
-        return Probe(way_id, start, Point(along[0][0], along[0][1], along[1]), forbidden)
+        along = walk(pts, min(target, total * fraction))
+        return Probe(way_id, start, Point(along[0][0], along[0][1], along[1]),
+                     forbidden, fraction)
 
     to_legs = exits(to_way)
     if not to_legs:
         return None, "to_way_not_drivable_away_from_via"
     if kind.startswith("no_"):
         case.probes = [p for p in (probe(to_way, leg, True) for leg in to_legs) if p]
+        # Real Greater Manchester r14551046: a prohibited left turn on a
+        # two-node service driveway may be destination-sensitive. Preserve
+        # the original probe and add a nearer one. Any failing probe still
+        # fails the relation; neither result grants a routing exception.
+        target_tags, target_nodes = ways[to_way]
+        if (target_tags.get("highway") == "service"
+                and target_tags.get("service") == "driveway"
+                and len(target_nodes) == 2):
+            case.probes += [p for p in (probe(to_way, leg, True, fraction=0.35)
+                                       for leg in to_legs) if p]
     else:
         case.probes = [p for p in (probe(to_way, leg, False) for leg in to_legs[:1]) if p]
         for other in sorted(node_ways.get(via, ())):
@@ -420,18 +432,25 @@ def judge_case(case, router):
         except ProbeInconclusive as error:
             status, detail = "inconclusive", str(error)
         result = {"target_way": p.target_way, "forbidden_target": p.forbidden,
+                  "target_fraction": p.target_fraction,
                   "status": status, "detail": detail}
         decoder = getattr(router, "last_decoder", None)
         if decoder:
             result["decoder"] = decoder
         results.append(result)
     statuses = [r["status"] for r in results]
+    # Every probe of the relation matters. Previously a single successful
+    # route could conceal an inconclusive or unroutable alternative exit.
+    # A relation only passes when *all* its probes have been examined and
+    # none violates the restriction; unresolved probes retain their status.
     if "fail" in statuses:
         overall = "fail"
-    elif "pass" in statuses:
-        overall = "pass"
+    elif "inconclusive" in statuses:
+        overall = "inconclusive"
     elif "no_route" in statuses:
         overall = "no_route"
+    elif statuses and all(s == "pass" for s in statuses):
+        overall = "pass"
     else:
         overall = "inconclusive"
     return overall, results
@@ -524,14 +543,26 @@ def run(ways, relations, coords_loader, router, region):
             skipped[reason] += 1
             continue
         status, probes = judge_case(case, router)
-        if status == "fail" and case.restriction in ENGINE_UNSUPPORTED:
-            # Known routing-engine gap, listed separately so that it is never
-            # hidden yet cannot mask a new, unexpected failure.
+        if case.restriction in ENGINE_UNSUPPORTED:
+            # The pinned engine's graph builder does not represent this
+            # restriction. Even a no-route, inconclusive, or apparently safe
+            # sample is not proof of support. Always retain the blocker,
+            # and keep the individual probe outcomes for diagnosis.
             status = "engine_unsupported"
         counts[status] += 1
         by_type[case.restriction + ":" + status] += 1
+        target_tags, target_nodes = ways[case.to_way]
         record = {
             "relation": case.relation, "restriction": case.restriction,
+            "target_way_context": {
+                "highway": target_tags.get("highway"),
+                "service": target_tags.get("service"),
+                "oneway": target_tags.get("oneway"),
+                "node_count": len(target_nodes),
+                "two_node_driveway": (target_tags.get("highway") == "service"
+                                      and target_tags.get("service") == "driveway"
+                                      and len(target_nodes) == 2),
+            },
             "from_way": case.from_way, "via_node": case.via_node, "to_way": case.to_way,
             "via_location": [round(case.via[0], 7), round(case.via[1], 7)],
             "osm_url": f"https://www.openstreetmap.org/relation/{case.relation}",
@@ -560,10 +591,15 @@ def run(ways, relations, coords_loader, router, region):
         "by_type": dict(sorted(by_type.items())),
         "failures": failures, "no_route_examples": examples["no_route"],
         "inconclusive_examples": examples["inconclusive"],
-        "accepted": counts.get("fail", 0) == 0,
+        # Supported-probe violations and known-unsupported OSM restrictions
+        # *both* keep this acceptance job red. Neither can safely be called
+        # accepted until the routing engine or a verified route guard fixes it.
+        "accepted": counts.get("fail", 0) == 0 and counts.get("engine_unsupported", 0) == 0,
+        "known_routing_safety_blockers": counts.get("fail", 0) + counts.get("engine_unsupported", 0),
         "scope": ("Routing-engine compliance with simple node-via OSM restrictions for auto costing. "
                   "Detection only: no data is repaired, invented or uploaded."),
         "limitations": [
+            "Accepted means no detected violations or known unsupported restrictions; skipped, no_route and inconclusive cases still require independent safety review.",
             "Assumes the OSM relation is correct; does not verify signage or ground truth.",
             "Conditional, timed, vehicle-specific, way-via and flagged relations are skipped, not tested.",
             "A pass covers only the probed approach and destinations, not every possible route.",
@@ -593,6 +629,12 @@ def summary_markdown(report):
         for f in report["failures"][:50]:
             lines.append(f"| [r{f['relation']}]({f['osm_url']}) | {f['restriction']} | "
                          f"w{f['from_way']} | n{f['via_node']} | w{f['to_way']} |")
+    if report["failures"]:
+        for f in report["failures"][:20]:
+            if f.get("target_way_context", {}).get("two_node_driveway"):
+                probes = ", ".join(f"{p['target_fraction']:.2f}: {p['status']}" for p in f["probes"])
+                lines.append(f"- r{f['relation']} two-node driveway probe positions: {probes} (no suppression).")
+    lines += ["", "**Known routing-safety blockers: " + str(report["known_routing_safety_blockers"]) + "** (failed restriction probes and unsupported engine restrictions; other skipped/inconclusive cases are not cleared)."]
     lines += ["", "Accepted: **" + ("yes" if report["accepted"] else "NO") + "**. "
               "Detection only; OSM correctness and signage are not verified."]
     return "\n".join(lines) + "\n"
