@@ -32,3 +32,27 @@ ancillary files fail the complete-build inventory. Older schema-1 inventories
 remain readable; that backward compatibility does not clear their rights gaps.
 All entries continue to say `not_independently_verified`. Fingerprints are
 reproducibility evidence, never a permission decision.
+
+## Places provenance/notice sidecar
+
+`places.py` now also writes one nationwide `places-provenance.json` beside the
+unchanged five-field `places-<row>_<col>.json.gz` tiles (Android still reads only
+the tiles). It records per-source record counts after merge and de-duplication
+(Overture, OSM, OS Open Names), input and rejected-coordinate counts, a per-dataset
+breakdown of kept Overture records from the parquet `sources[].dataset` column
+(`unavailable` when that column is absent), and the Overture release passed with
+`--overture-release` (`unknown` when not supplied). The map workflow resolves the
+latest release with `overturemaps releases latest`, downloads exactly that
+release and passes it on; if the release cannot be resolved it records `unknown`.
+Licence and notice wording is copied only from the table above and lives in
+`scripts/places_provenance.py`. `validate_build.py` checks the sidecar's totals
+against the audited tiles, and the publisher validates its structure and requires
+it for navigation-data publication.
+
+What it does NOT establish: it is not legal clearance and says
+`rights_review_status: "not_independently_verified"`. It does not contain the
+Foursquare NOTICE file text, a modification notice, or exact OS/Royal Mail/National
+Statistics notice wording; it does not give per-record lineage inside the tiles;
+and per-dataset counts reflect what the Overture input declares, not verified
+upstream ownership. The publication blockers above remain until those obligations
+are reviewed and satisfied.

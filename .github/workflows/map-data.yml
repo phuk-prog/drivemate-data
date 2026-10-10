@@ -4,6 +4,7 @@ name: Build our own map data
 #  - drivemate.pmtiles: the map pictures (the app fetches just the squares it needs)
 #  - lanes-<row>_<col>.json: lane counts and arrows, in half-degree squares (fetched along your route)
 #  - places-<row>_<col>.json.gz: businesses and places from Overture, quarter-degree squares (for search)
+#  - places-provenance.json: per-source counts, Overture release and licence notices for the places (not legal clearance)
 #  - roadinfo-<row>_<col>.json: road warnings and turn landmarks, half-degree squares (fetched along your route)
 #  - search-offline-uk.tsv.gz: every GB postcode, street and named place, for search with no signal
 on:
@@ -323,8 +324,19 @@ jobs:
         run: |
           pip install -q overturemaps pyarrow pyproj
           mkdir -p out/places work/osnames
-          # Overture (businesses)
-          overturemaps download --bbox=-8.7,49.8,1.8,60.9 -f geoparquet --type=place -o work/places.parquet || echo "::warning::Overture download failed"
+          # Overture (businesses). Resolve the latest release first and download exactly that
+          # release, so places-provenance.json can name it. If it cannot be resolved (or this
+          # overturemaps version lacks the releases command) download as before and record "unknown".
+          overture_release=$(overturemaps releases latest 2>/dev/null | tail -n 1 | tr -d '[:space:]' || true)
+          if [[ "$overture_release" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\.[0-9]+$ ]]; then
+            overturemaps download --bbox=-8.7,49.8,1.8,60.9 -f geoparquet --type=place --release "$overture_release" \
+              -o work/places.parquet || echo "::warning::Overture download failed"
+          else
+            echo "::warning::Overture release could not be resolved; provenance will record it as unknown"
+            overture_release=unknown
+            overturemaps download --bbox=-8.7,49.8,1.8,60.9 -f geoparquet --type=place -o work/places.parquet || echo "::warning::Overture download failed"
+          fi
+          echo "overture_release=$overture_release" | tee -a out/build-info.txt
           # OpenStreetMap points of interest (from the UK file we already have)
           osmium tags-filter work/base.osm.pbf nwr/amenity nwr/shop nwr/tourism nwr/leisure nwr/office nwr/craft nwr/healthcare \
             -o work/pois.osm.pbf --overwrite
@@ -333,7 +345,10 @@ jobs:
           # Ordnance Survey Open Names (official streets and places; free download)
           url=$(curl -sSf "https://api.os.uk/downloads/v1/products/OpenNames/downloads?area=GB&format=CSV" | jq -r '.[0].url') && \
             curl -sSfL -o work/opennames.zip "$url" && unzip -q -o work/opennames.zip -d work/osnames || echo "::warning::OS Open Names download failed"
-          python3 scripts/places.py out/places --overture work/places.parquet --osm work/pois.geojsonseq --osnames work/osnames
+          # Also writes out/places/places-provenance.json (per-source counts and notices; not legal clearance).
+          python3 scripts/places.py out/places --overture work/places.parquet --overture-release "$overture_release" \
+            --osm work/pois.geojsonseq --osnames work/osnames
+          test -s out/places/places-provenance.json
           ls out/places | wc -l; du -sh out/places
 
       - name: Offline postcode and place search (OS Open Names), one file for the phone
@@ -412,6 +427,7 @@ jobs:
             out/build-quality.json
             out/build-quality.md
             out/source-inventory.json
+            out/places/places-provenance.json
             out/limit-checks.md
             work/topology/*-report.json
             work/restrictions/*-report.json

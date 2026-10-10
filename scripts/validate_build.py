@@ -6,6 +6,7 @@ import json
 import sys
 from coverage_audit import audit as audit_coverage
 from source_inventory import read as read_source_inventory
+import places_provenance
 from publication_consistency import snapshot_assets, read_report, verify_map_archive_report
 
 out = Path(sys.argv[1])
@@ -76,6 +77,21 @@ try:
     warnings.append("Licence declarations require separate legal review; file fingerprints alone do not prove reuse rights.")
 except (ValueError, OSError, UnicodeError, json.JSONDecodeError) as exc:
     errors.append(f"Source inventory invalid or missing: {exc}")
+
+try:
+    # The sidecar must describe exactly the tiles audited above.
+    provenance = places_provenance.read(out / "places" / places_provenance.FILENAME)
+    audited = regional_coverage["place_archive_audit"]
+    if provenance["total_records"] != audited["records_checked"]:
+        errors.append(f"Places provenance counts {provenance['total_records']:,} records; "
+                      f"tiles contain {audited['records_checked']:,}")
+    if provenance["tile_files"] != len(place_files):
+        errors.append(f"Places provenance lists {provenance['tile_files']} tiles; found {len(place_files)}")
+    if provenance["overture"]["release"] == places_provenance.UNKNOWN:
+        warnings.append("Overture release not recorded in places provenance")
+    warnings.append("Places provenance sidecar records notices from the rights review; it is not legal clearance.")
+except (ValueError, OSError, UnicodeError, json.JSONDecodeError) as exc:
+    errors.append(f"Places provenance sidecar invalid or missing: {exc}")
 
 for name, bad in (("lane files", bad_lanes), ("limit files", bad_limits), ("road-info files", bad_road)):
     if bad:

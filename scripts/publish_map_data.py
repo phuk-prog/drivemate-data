@@ -147,6 +147,8 @@ def _load(name):
 
 
 regional = _load('region_publication')
+places_provenance = _load('places_provenance')
+PLACE_TILE = re.compile(r'places--?\d+_-?\d+\.json\.gz')
 
 
 def local_files(out):
@@ -166,9 +168,9 @@ def local_files(out):
                          'charge-zones-uk.json', 'search-offline-uk.tsv.gz',
                          'build-quality.json', 'build-quality.md', 'limit-checks.md',
                          'mapillary-arrows-cache.json.gz', 'mapillary-signs-cache.json.gz',
-                         'source-inventory.json'} or
+                         'source-inventory.json', places_provenance.FILENAME} or
                 re.fullmatch(r'(?:lanes|limits|roadinfo)--?\d+_-?\d+\.json', name) or
-                re.fullmatch(r'places--?\d+_-?\d+\.json\.gz', name) or
+                PLACE_TILE.fullmatch(name) or
                 regional.is_regional_asset(name)):
             raise ValueError('Unexpected map output file')
         size = path.stat().st_size
@@ -212,6 +214,11 @@ def local_files(out):
                 inventory.read(path)
                 files[name] = path
                 continue
+            if name == places_provenance.FILENAME:
+                # Structural only: schema, required keys, non-negative integer counts.
+                places_provenance.validate(data)
+                files[name] = path
+                continue
             if name == 'build-quality.json':
                 if not isinstance(data, dict) or data.get('errors') != []:
                     raise ValueError('Missing or failing quality report')
@@ -224,7 +231,7 @@ def local_files(out):
         files[name] = path
     if not {'drivemate.pmtiles', 'cameras-uk.json', 'build-info.txt'} <= files.keys():
         raise ValueError('Required map assets missing')
-    if not any(name.startswith('lanes-') for name in files) or not any(name.startswith('places-') for name in files):
+    if not any(name.startswith('lanes-') for name in files) or not any(PLACE_TILE.fullmatch(name) for name in files):
         raise ValueError('Lane or place tiles missing')
     regional.validate_staged(files)
     return files
@@ -306,6 +313,8 @@ def publish(github, out, tag, extra_tag=None, navigation_data=False):
         if not required <= files.keys() or not all(any(name.startswith(prefix) for name in files)
                                                   for prefix in ('limits-', 'roadinfo-')):
             raise ValueError('Required navigation datasets missing')
+        if any(PLACE_TILE.fullmatch(name) for name in files) and places_provenance.FILENAME not in files:
+            raise ValueError('Places provenance sidecar missing')
     if navigation_data:
         # A report saying errors=[] is not proof it checked this exact output.
         # Compare every asset hash and filename before any remote release action.

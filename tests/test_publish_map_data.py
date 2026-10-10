@@ -13,6 +13,16 @@ publisher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(publisher)
 
 
+def write_places_provenance(out, **changes):
+    """Sidecar matching setUp's single synthetic place tile."""
+    document = publisher.places_provenance.build(
+        {'osm': 1}, {'osm': 1}, {}, 1, None, False, 'unavailable')
+    document.update(changes)
+    path = Path(out) / 'places-provenance.json'
+    path.write_text(json.dumps(document))
+    return path
+
+
 class FakeGitHub:
     def __init__(self):
         self.files = {publisher.LEGACY: {}}
@@ -79,6 +89,7 @@ class PublisherTest(unittest.TestCase):
         provenance = inventory.build(source_file,
             'https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf', inputs)
         (self.out / 'source-inventory.json').write_text(json.dumps(provenance))
+        write_places_provenance(self.out)
         spec = importlib.util.spec_from_file_location(
             'publication_consistency', Path(__file__).resolve().parents[1] / 'scripts/publication_consistency.py')
         binder = importlib.util.module_from_spec(spec)
@@ -93,6 +104,34 @@ class PublisherTest(unittest.TestCase):
         self.assertEqual('source-inventory.json', manifest['source_inventory']['asset'])
         self.assertEqual(hashlib.sha256((self.out / 'source-inventory.json').read_bytes()).hexdigest(),
                          manifest['source_inventory']['sha256'])
+        self.assertIn('places-provenance.json', manifest['files'])
+
+    def test_navigation_publish_requires_places_provenance_sidecar(self):
+        self.prepare_navigation_sample()
+        (self.out / 'places-provenance.json').unlink()
+        with self.assertRaisesRegex(ValueError, 'provenance sidecar missing'):
+            publisher.publish(self.github, self.out, 'map-data-no-provenance', navigation_data=True)
+        self.assertEqual([], self.github.actions)
+
+    def test_places_provenance_sidecar_is_allowed_and_structurally_validated(self):
+        write_places_provenance(self.out)
+        self.assertIn('places-provenance.json', publisher.local_files(self.out))
+        for changes in ({'schema': 2}, {'rights_review_status': 'cleared'},
+                        {'records_by_primary_source': {'overture': 0, 'osm': -1, 'osnames': 2}},
+                        {'records_by_primary_source': {'overture': 0, 'osm': '1', 'osnames': 0}},
+                        {'total_records': 7}, {'sources': {}}):
+            write_places_provenance(self.out, **changes)
+            with self.assertRaises(ValueError):
+                publisher.local_files(self.out)
+        (self.out / 'places-provenance.json').write_text('[]')
+        with self.assertRaises(ValueError):
+            publisher.local_files(self.out)
+
+    def test_sidecar_alone_does_not_count_as_place_tiles(self):
+        write_places_provenance(self.out)
+        (self.out / 'places-212_-9.json.gz').unlink()
+        with self.assertRaisesRegex(ValueError, 'place tiles missing'):
+            publisher.local_files(self.out)
 
     def test_stale_quality_report_cannot_publish_changed_map_assets(self):
         # Build a valid miniature navigation bundle without contacting GitHub.
@@ -139,6 +178,7 @@ class PublisherTest(unittest.TestCase):
             source_file,
             'https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf', inputs)
         (self.out / 'source-inventory.json').write_text(json.dumps(provenance))
+        write_places_provenance(self.out)
         spec = importlib.util.spec_from_file_location(
             'publication_consistency', Path(__file__).resolve().parents[1] / 'scripts/publication_consistency.py')
         binder = importlib.util.module_from_spec(spec)
