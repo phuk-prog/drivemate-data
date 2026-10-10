@@ -116,6 +116,8 @@ class Route:
     distance_m: float
     duration_s: float
     segments: list = field(default_factory=list)
+    # Why the node-based checks (restriction, one-way, U-turn) cannot be trusted for this route.
+    unverifiable: str = None
 
     def way_sequence(self):
         out = []
@@ -344,7 +346,8 @@ class OsrmRouter(Router):
             for n in leg.get("annotation", {}).get("nodes", []):
                 if not nodes or nodes[-1] != n:
                     nodes.append(n)
-        return Route(best["distance"], best["duration"], segments_from_nodes(nodes, self.index))
+        segments = segments_from_nodes(nodes, self.index)
+        return Route(best["distance"], best["duration"], segments, node_list_problem(nodes, segments))
 
 
 def segments_from_nodes(nodes, index):
@@ -367,6 +370,25 @@ def segments_from_nodes(nodes, index):
         segments.append(Segment(way_id, a, b, heading, heading, u, v, candidates))
         previous = way_id
     return segments
+
+
+def node_list_problem(nodes, segments):
+    """Why an OSRM ``annotations=nodes`` list is not a trustworthy path (None when it is).
+
+    The first real run (304 journeys) showed every flagged OSRM route contained node pairs that
+    are not consecutive nodes of any indexed way, and none of the 31 routes with every pair mapped
+    was flagged. OSRM compresses its graph and drops or reorders nodes (ferries and ways the index
+    does not hold also appear), so such a list does not reproduce the driven path: one-way, U-turn
+    and restriction judgements on it are tool artefacts. A path that returns to the node it came
+    from is also not something a route can do.
+    """
+    unmapped = sum(1 for s in segments if s.way_id is None)
+    if unmapped:
+        return f"{unmapped} of {len(segments)} node pairs are not edges of an indexed way"
+    clean = [n for i, n in enumerate(nodes) if i == 0 or n != nodes[i - 1]]
+    if any(a == c for a, c in zip(clean, clean[2:])):
+        return "node list doubles back on itself"
+    return None
 
 
 class ValhallaRouter(Router):
@@ -570,14 +592,17 @@ def compare(journey, routes, reasons, errors, index, ratio_limit):
         engines[name] = {"status": "ok", "distance_m": round(route.distance_m, 1),
                          "duration_s": round(route.duration_s, 1), "ways": route.way_sequence(),
                          "unmapped_segments": sum(1 for s in route.segments if s.way_id is None)}
+        if journey.via:
+            engines[name]["passes_named_via"] = passes_near(route, journey.via)
+        if route.unverifiable:
+            engines[name]["unverifiable"] = route.unverifiable
+            continue  # node-based checks would only measure the tool, not the engine
         for v in restriction_violations(route, index):
             flags.append({"type": "restriction_violation", "engine": name, **v})
         for v in oneway_violations(route, index):
             flags.append({"type": "oneway_violation", "engine": name, **v})
         for v in u_turns(route):
             flags.append({"type": "u_turn", "engine": name, **v})
-        if journey.via:
-            engines[name]["passes_named_via"] = passes_near(route, journey.via)
     ok = [n for n, e in engines.items() if e["status"] == "ok"]
     unroutable = [n for n, e in engines.items() if e["status"] == "no_route"]
     if len(ok) == 1 and unroutable:
@@ -622,6 +647,7 @@ def run(journeys, routers, index, ratio_limit=DEFAULT_RATIO, snap=None, region="
     counts = Counter(f["type"] + ":" + f.get("engine", "both") for r in results for f in r["flags"])
     flag_journeys = Counter(t for r in results for t in {f["type"] for f in r["flags"]})
     statuses = Counter(n + ":" + e["status"] for r in results for n, e in r["engines"].items())
+    unverifiable = Counter(n for r in results for n, e in r["engines"].items() if e.get("unverifiable"))
     valhalla_flags = [dict(f, journey=r["id"]) for r in results for f in r["flags"] if blocking(f)]
     unsupported = [{"relation": r.relation, "restriction": r.kind, "from_way": r.from_way,
                     "via_node": r.via_node, "to_way": r.to_way,
@@ -634,6 +660,7 @@ def run(journeys, routers, index, ratio_limit=DEFAULT_RATIO, snap=None, region="
         "engines": [router.name for router in routers], "ratio_limit": ratio_limit,
         "journeys": len(results), "flagged_journeys": len(flagged),
         "engine_status": dict(sorted(statuses.items())),
+        "unverifiable_routes": dict(sorted(unverifiable.items())),
         "flag_counts": dict(sorted(counts.items())),
         "journeys_with_flag": dict(sorted(flag_journeys.items())),
         "restrictions_indexed": sum(len(v) for v in index.restrictions.values()),
@@ -683,6 +710,9 @@ def markdown(report, top=25):
         lines += [f"Extract SHA-256: `{src['sha256']}`", ""]
     lines += ["| Engine result | Journeys |", "|---|---:|"]
     lines += [f"| {k} | {v:,} |" for k, v in report["engine_status"].items()]
+    for engine, n in (report.get("unverifiable_routes") or {}).items():
+        lines += ["", f"{engine}: **{n:,}** routes unverifiable (node list is not a clean path); "
+                      "restriction, one-way and U-turn checks skipped for them, not passed."]
     lines += ["", "| Flag (engine) | Count |", "|---|---:|"]
     lines += [f"| {k} | {v:,} |" for k, v in report["flag_counts"].items()] or ["| none | 0 |"]
     if report["engine_unsupported"]:

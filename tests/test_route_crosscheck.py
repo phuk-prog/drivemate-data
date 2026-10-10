@@ -318,6 +318,45 @@ class Output(unittest.TestCase):
             self.assertIn("Route cross-check", (tmp / "r.md").read_text())
 
 
+class OsrmUnverifiable(unittest.TestCase):
+    """The real run: every flagged OSRM route had non-edge node pairs; fully mapped ones had none."""
+
+    def osrm(self, idx, nodes):
+        body = json.dumps({"code": "Ok", "routes": [{"distance": 250.0, "duration": 30.0, "legs": [
+            {"annotation": {"nodes": nodes}}]}]}).encode()
+        with mock.patch.object(rc.urllib.request, "urlopen", return_value=io.BytesIO(body)):
+            return rc.OsrmRouter("http://osrm", idx).route((53.479, -2.24), (53.48, -2.2385))
+
+    def test_clean_path_is_verifiable(self):
+        self.assertIsNone(self.osrm(index(), [1, 2, 3]).unverifiable)
+
+    def test_non_edge_pair_makes_route_unverifiable_and_unflagged(self):
+        idx = index(north_tags={"oneway": "-1"})
+        route = self.osrm(idx, [1, 2, 4, 99, 3])  # 2 -> 4 is against the one-way; 4 -> 99 is no edge
+        self.assertIn("not edges", route.unverifiable)
+        result = rc.compare(JOURNEY, {"osrm": route}, {}, {}, idx, 1.25)
+        self.assertEqual(result["flags"], [])
+        self.assertIn("unverifiable", result["engines"]["osrm"])
+
+    def test_doubling_back_is_unverifiable(self):
+        # Pattern from the report: 180 degree "U-turns" on one way with every pair a real edge.
+        route = self.osrm(index(), [1, 2, 1])
+        self.assertIn("doubles back", route.unverifiable)
+        result = rc.compare(JOURNEY, {"osrm": route}, {}, {}, index(), 1.25)
+        self.assertEqual(result["flags"], [])
+
+    def test_valhalla_still_checked_and_summary_counts_unverifiable(self):
+        idx = index(north_tags={"oneway": "-1"})
+        bad = self.osrm(idx, [1, 2, 4, 99])
+        valhalla = rc.Route(1000.0, 100.0, [rc.Segment(SOUTH, COORDS[1], COORDS[2], 0, 0),
+                                            rc.Segment(NORTH, COORDS[2], COORDS[4], 0, 0)])
+        report = rc.run([JOURNEY], [FakeRouter("valhalla", valhalla), FakeRouter("osrm", bad)], idx)
+        self.assertEqual(report["unverifiable_routes"], {"osrm": 1})
+        self.assertEqual(report["flag_counts"].get("oneway_violation:valhalla"), 1)
+        self.assertNotIn("oneway_violation:osrm", report["flag_counts"])
+        self.assertIn("unverifiable", rc.markdown(report))
+
+
 class Workflow(unittest.TestCase):
     def test_workflow_contract(self):
         wf = yaml.safe_load((ROOT / ".github/workflows/route-crosscheck.yml").read_text())
