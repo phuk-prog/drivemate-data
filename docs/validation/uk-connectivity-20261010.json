@@ -1,0 +1,79 @@
+{
+  "scope": "Sampled offline routing connections, not complete UK graph or legal correctness",
+  "checked": 11,
+  "route_found": 11,
+  "investigate": 0,
+  "cases": [
+    {
+      "name": "Leeds–York",
+      "straight_km": 35.41,
+      "road_km": 44.76,
+      "status": "route_found"
+    },
+    {
+      "name": "Cardiff–Swansea",
+      "straight_km": 55.1,
+      "road_km": 66.7,
+      "status": "route_found"
+    },
+    {
+      "name": "Edinburgh–Glasgow",
+      "straight_km": 67.02,
+      "road_km": 83.39,
+      "status": "route_found"
+    },
+    {
+      "name": "Aberdeen–Inverness",
+      "straight_km": 133.02,
+      "road_km": 170.34,
+      "status": "route_found"
+    },
+    {
+      "name": "Derry–Belfast",
+      "straight_km": 99.5,
+      "road_km": 116.36,
+      "status": "route_found"
+    },
+    {
+      "name": "London–Brighton",
+      "straight_km": 76.16,
+      "road_km": 85.99,
+      "status": "route_found"
+    },
+    {
+      "name": "Bristol–Exeter",
+      "straight_km": 105.19,
+      "road_km": 130.87,
+      "status": "route_found"
+    },
+    {
+      "name": "Norwich–Ipswich",
+      "straight_km": 64.65,
+      "road_km": 74.22,
+      "status": "route_found"
+    },
+    {
+      "name": "Newcastle–Carlisle",
+      "straight_km": 84.55,
+      "road_km": 95.12,
+      "status": "route_found"
+    },
+    {
+      "name": "Wrexham–Chester",
+      "straight_km": 17.62,
+      "road_km": 20.28,
+      "status": "route_found"
+    },
+    {
+      "name": "Belfast–Newry",
+      "straight_km": 53.76,
+      "road_km": 59.8,
+      "status": "route_found"
+    }
+  ],
+  "limitations": [
+    "Endpoint snapping may differ; sample failures are diagnostic, not proof of a missing road.",
+    "Passing probes cannot establish every connected component, legal turn or regional boundary.",
+    "This diagnostic report does not authorise new junction geometry or legal restrictions."
+  ]
+}

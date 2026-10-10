@@ -31,6 +31,7 @@ os.makedirs(args.out, exist_ok=True)
 
 squares = {}  # (row, col) -> list of [name, cat, addr, lat, lon]
 counts = {}
+rejected = {}
 
 
 def norm(name):
@@ -39,6 +40,14 @@ def norm(name):
 
 def add(source, name, cat, addr, lat, lon):
     if not name or lat is None or lon is None:
+        return
+    # Full OSM relations can extend beyond the extract boundary. Do not index
+    # overseas centroids or non-finite values into downloadable UK packages.
+    # This envelope matches coverage_audit; it is not a territorial boundary.
+    if (type(lat) not in (int, float) or type(lon) not in (int, float)
+        or not math.isfinite(lat) or not math.isfinite(lon)
+        or not 49 <= lat <= 61.5 or not -9.5 <= lon <= 3):
+        rejected[source] = rejected.get(source, 0) + 1
         return
     key = (math.floor(lat * 4), math.floor(lon * 4))
     squares.setdefault(key, []).append([name, cat or "", addr or "", round(lat, 6), round(lon, 6), source])
@@ -162,9 +171,12 @@ for (row, col), items in squares.items():
     with gzip.open(os.path.join(args.out, f"places-{row}_{col}.json.gz"), "wt", encoding="utf-8") as f:
         json.dump(kept, f, separators=(",", ":"))
 
-stats = {"sources": counts, "merged": total, "squares": len(squares)}
+stats = {"sources": counts, "merged": total, "squares": len(squares),
+         "rejected_coordinate_records": rejected,
+         "coordinate_filter": "UK envelope only, not precise territorial coverage"}
 print(json.dumps(stats))
 summary = os.environ.get("GITHUB_STEP_SUMMARY")
 if summary:
     with open(summary, "a", encoding="utf-8") as s:
         s.write(f"Places: {total:,} after merging ({', '.join(f'{k} {v:,}' for k, v in counts.items())}) in {len(squares)} squares\n\n")
+        s.write(f"Excluded invalid/out-of-envelope coordinates by source: {rejected}\n\n")

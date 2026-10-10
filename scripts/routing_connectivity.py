@@ -9,6 +9,7 @@ import argparse
 import json
 import math
 from pathlib import Path
+import tempfile
 
 # Different long-distance corridors, cross-border routes and nations.
 EXTRA_PROBES = {
@@ -83,9 +84,12 @@ def main():
     graph = Path(args.graph)
     if not graph.is_file():
         raise ValueError("Cannot test missing UK graph")
-    actor = Actor(get_config(tile_extract=str(graph), tile_dir=str(graph.parent / "empty"),
-                             verbose=False))
-    report = evaluate(actor)
+    # pyvalhalla resolves tile_dir strictly even when using a tile extract.
+    # Do not depend on a caller having created a neighbouring empty directory.
+    with tempfile.TemporaryDirectory(prefix='drivemate-connectivity-') as directory:
+        actor = Actor(get_config(tile_extract=str(graph), tile_dir=directory,
+                                 verbose=False))
+        report = evaluate(actor)
     Path(args.report).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n",
                                  encoding="utf-8")
     print(f"Extra UK connectivity diagnostics: {report['route_found']}/{report['checked']} routes found; "

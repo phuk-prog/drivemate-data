@@ -1,7 +1,7 @@
 """Fingerprints observed source files for reproducible map builds.
 
-This records selected input files, NOT feature-level provenance or a legal
-permission decision. Planetiler ancillary downloads remain out of scope.
+This records input files, NOT feature-level provenance or a legal permission
+decision. Known Planetiler ancillary downloads can also be fingerprinted.
 """
 import argparse
 from datetime import datetime, timezone
@@ -17,6 +17,36 @@ SOURCES = {
     "mapillary_arrows": ("Mapillary-derived observations", "Mapillary derivative-data terms: review required", "Mapillary contributors", False),
     "mapillary_signs": ("Mapillary-derived observations", "Mapillary derivative-data terms: review required", "Mapillary contributors", False),
 }
+
+# URLs are those selected by the pinned Planetiler 0.10.1 executable/profile.
+PLANETILER_SOURCES = {
+    'lake_centerline.shp.zip': ('OSM lake centre lines',
+        'https://github.com/acalcutt/osm-lakelines/releases/download/v12/lake_centerline.shp.zip',
+        'OSM-derived data; software MIT licence is not data clearance', True),
+    'water-polygons-split-3857.zip': ('OSM water polygons',
+        'https://osmdata.openstreetmap.de/download/water-polygons-split-3857.zip',
+        'ODbL-1.0', True),
+    'natural_earth_vector.sqlite.zip': ('Natural Earth',
+        'https://naciscdn.org/naturalearth/packages/natural_earth_vector.sqlite.zip',
+        'Public domain declaration', True),
+    'wikidata_names.json': ('Wikidata name translations',
+        'https://www.wikidata.org/', 'CC0 structured data; query/version not captured', False),
+}
+
+
+def planetiler_inventory(directory):
+    rows = []
+    for filename, (label, url, licence, required) in PLANETILER_SOURCES.items():
+        meta = fingerprint(Path(directory) / filename)
+        if required and meta is None:
+            raise ValueError('Required Planetiler source missing: ' + filename)
+        rows.append({'file': filename, 'label': label, 'origin_url': url,
+                     'declared_licence': licence, 'required': required,
+                     'present': meta is not None,
+                     'bytes': meta['bytes'] if meta else None,
+                     'sha256': meta['sha256'] if meta else None,
+                     'rights_review': 'not_independently_verified'})
+    return rows
 
 
 def fingerprint(filename):
@@ -34,7 +64,7 @@ def fingerprint(filename):
     return {"bytes": path.stat().st_size, "sha256": sha.hexdigest()}
 
 
-def build(osm, osm_url, others):
+def build(osm, osm_url, others, planetiler_sources=None):
     if not isinstance(osm_url, str) or not osm_url.startswith("https://download.geofabrik.de/") or not osm_url.endswith(".osm.pbf"):
         raise ValueError("Unrecognised OSM source URL")
     if set(others) != (set(SOURCES) - {"osm_uk"}):
@@ -52,13 +82,16 @@ def build(osm, osm_url, others):
             "origin_url": osm_url if required else None,
             "rights_review": "not_independently_verified",
         })
-    return {"schema": 1, "generated_utc": datetime.now(timezone.utc).isoformat(),
+    document = {"schema": 1, "generated_utc": datetime.now(timezone.utc).isoformat(),
             "scope": "Observed source files; not per-feature provenance",
             "sources": out,
             "limitations": [
                 "Declared licences do not establish legal permission to redistribute every derived feature.",
-                "Planetiler ancillary downloads and per-feature source lineage are not inventoried.",
+                "Known Planetiler ancillary inputs are recorded only when a source directory is supplied; per-feature lineage and redirects are not captured.",
                 "Presence does not prove that the source was actually incorporated or covers all UK regions."]}
+    if planetiler_sources is not None:
+        document['planetiler_ancillary'] = planetiler_inventory(planetiler_sources)
+    return document
 
 
 def validate(doc):
@@ -107,6 +140,32 @@ def validate(doc):
                 raise ValueError("Required source URL invalid")
         elif url is not None:
             raise ValueError("Unverified optional source URL")
+    if 'planetiler_ancillary' in doc:
+        rows = doc['planetiler_ancillary']
+        if not isinstance(rows, list) or len(rows) != len(PLANETILER_SOURCES):
+            raise ValueError('Incomplete Planetiler ancillary inventory')
+        seen = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                raise ValueError('Invalid Planetiler source entry')
+            filename = row.get('file')
+            if filename not in PLANETILER_SOURCES or filename in seen:
+                raise ValueError('Duplicate or unknown Planetiler source')
+            seen.add(filename)
+            label, url, licence, required = PLANETILER_SOURCES[filename]
+            if (row.get('label'), row.get('origin_url'), row.get('declared_licence'),
+                row.get('required'), row.get('rights_review')) != (
+                    label, url, licence, required, 'not_independently_verified'):
+                raise ValueError('Planetiler source declarations changed')
+            if type(row.get('present')) is not bool or (required and not row['present']):
+                raise ValueError('Required Planetiler source absent')
+            if row['present']:
+                if (type(row.get('bytes')) is not int or row['bytes'] <= 0
+                    or not isinstance(row.get('sha256'), str)
+                    or not re.fullmatch('[0-9a-f]{64}', row['sha256'])):
+                    raise ValueError('Invalid Planetiler source fingerprint')
+            elif row.get('bytes') is not None or row.get('sha256') is not None:
+                raise ValueError('Absent Planetiler source has fingerprint')
     return doc
 
 
@@ -119,7 +178,7 @@ def read(path):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    for flag in ("osm", "osm-url", "overture", "os-names", "mapillary-arrows", "mapillary-signs", "out", "validate"):
+    for flag in ("osm", "osm-url", "overture", "os-names", "mapillary-arrows", "mapillary-signs", "planetiler-sources", "out", "validate"):
         p.add_argument("--" + flag)
     a = p.parse_args()
     if a.validate:
@@ -134,7 +193,7 @@ def main():
             "mapillary_arrows": a.mapillary_arrows,
             "mapillary_signs": a.mapillary_signs,
         }
-        doc = validate(build(a.osm, a.osm_url, sources))
+        doc = validate(build(a.osm, a.osm_url, sources, a.planetiler_sources))
         path = Path(a.out)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(doc, sort_keys=True, indent=2) + "\n", encoding="utf-8")

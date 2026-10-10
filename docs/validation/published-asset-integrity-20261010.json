@@ -1,0 +1,15 @@
+{
+  "scope": "Downloaded legacy release integrity, not legal clearance or geographic completeness",
+  "manifest_sha256": "1ce4935da3277bbf90d2cf5abd91c8d16fd3f025de1fbce84f5215cbc73c63ae",
+  "verified_assets": 999,
+  "expected_assets": 999,
+  "errors": [],
+  "layers_absent_from_manifest": [
+    "limits",
+    "roadinfo",
+    "offline_search",
+    "source_inventory",
+    "charge_zones",
+    "quality_report"
+  ]
+}

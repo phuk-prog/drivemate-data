@@ -25,6 +25,23 @@ class RoutingWorkflowTest(unittest.TestCase):
         oversized = generator.split('-gt 1950000000 ]; then', 1)[1].split('fi', 1)[0]
         self.assertIn('exit 1', oversized)
 
+    def test_validation_checks_capacity_and_uses_osm_only_observations(self):
+        path = Path(__file__).resolve().parents[1] / '.github/workflows/map-data.yml'
+        workflow = yaml.safe_load(path.read_text())
+        steps = workflow['jobs']['build']['steps']
+        capacity = next(i for i, s in enumerate(steps) if s.get('name', '').startswith('Validate dependencies'))
+        download = next(i for i, s in enumerate(steps) if s.get('name', '').startswith('OpenStreetMap base'))
+        self.assertLess(capacity, download)
+        self.assertIn('unified_preflight.py', steps[capacity]['run'])
+        arrows = next(s for s in steps if s.get('name', '').startswith('Painted lane arrows'))
+        self.assertEqual(arrows['if'], "github.event_name != 'workflow_dispatch' || inputs.validate_only == false")
+        limits = next(s for s in steps if s.get('name', '').startswith('Speed limits'))
+        baseline = limits['run'].split('if [ "$VALIDATE_ONLY" = "true" ]; then', 1)[1].split('\nfi', 1)[0]
+        self.assertIn('scripts/limits.py', baseline)
+        self.assertIn('exit 0', baseline)
+        self.assertNotIn('--roads', baseline)
+        self.assertNotIn('--signs-cache', baseline)
+
     def test_failed_graph_builder_pipeline_cannot_be_hidden_by_tail(self):
         path = Path(__file__).resolve().parents[1] / '.github/workflows/map-data.yml'
         workflow = yaml.safe_load(path.read_text())

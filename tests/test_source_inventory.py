@@ -61,6 +61,36 @@ class InventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Duplicate"):
             source.validate(result)
 
+    def ancillary_sources(self):
+        for name, (_, _, _, required) in source.PLANETILER_SOURCES.items():
+            if required:
+                (self.dir / name).write_bytes(b'synthetic ' + name.encode())
+        return source.build(self.osm, URL, self.optional, self.dir)
+
+    def test_required_ancillary_files_and_optional_names_are_recorded(self):
+        result = source.validate(self.ancillary_sources())
+        self.assertEqual(len(result['planetiler_ancillary']), 4)
+        self.assertEqual(sum(row['present'] for row in result['planetiler_ancillary']), 3)
+        self.assertTrue(all(row['rights_review'] == 'not_independently_verified'
+                            for row in result['planetiler_ancillary']))
+
+    def test_missing_ancillary_file_blocks_complete_build_inventory(self):
+        self.ancillary_sources()
+        (self.dir / 'water-polygons-split-3857.zip').unlink()
+        with self.assertRaisesRegex(ValueError, 'Required Planetiler source missing'):
+            source.build(self.osm, URL, self.optional, self.dir)
+
+    def test_ancillary_duplicate_tampering_and_false_fingerprints_fail(self):
+        for mutation in ('duplicate', 'licence', 'hash', 'absent'):
+            result = self.ancillary_sources()
+            rows = result['planetiler_ancillary']
+            if mutation == 'duplicate': rows[1] = rows[0].copy()
+            elif mutation == 'licence': rows[0]['declared_licence'] = 'unrestricted'
+            elif mutation == 'hash': rows[0]['sha256'] = 'invalid'
+            else: rows[-1]['bytes'] = 1
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                source.validate(result)
+
 
 if __name__ == "__main__":
     unittest.main()
