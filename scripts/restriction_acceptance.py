@@ -543,9 +543,11 @@ def run(ways, relations, coords_loader, router, region):
             skipped[reason] += 1
             continue
         status, probes = judge_case(case, router)
-        if status == "fail" and case.restriction in ENGINE_UNSUPPORTED:
-            # Known routing-engine gap, listed separately so that it is never
-            # hidden yet cannot mask a new, unexpected failure.
+        if case.restriction in ENGINE_UNSUPPORTED:
+            # The pinned engine's graph builder does not represent this
+            # restriction. Even a no-route, inconclusive, or apparently safe
+            # sample is not proof of support. Always retain the blocker,
+            # and keep the individual probe outcomes for diagnosis.
             status = "engine_unsupported"
         counts[status] += 1
         by_type[case.restriction + ":" + status] += 1

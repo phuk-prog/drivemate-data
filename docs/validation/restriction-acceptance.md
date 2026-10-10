@@ -174,3 +174,9 @@ conservative automated test gate, not a modification of which roads are
 permitted in the installed Android app. All safety issues remain outstanding
 until engine support or source-backed runtime protection is implemented and
 proven in replay tests.
+
+## Stricter verdict — first Manchester comparison
+
+A full-area run of the conservative all-probes verdict at [run 38056304326](https://github.com/phuk-prog/drivemate-data/actions/runs/38056304326) found 1,849 PASS, 140 inconclusive, 1 violation and 3 engine-unsupported restrictions out of 2,602 total relations, with 609 skipped. The earlier run had 1,870 PASS and 119 inconclusive. This shows that the previous "one passing probe is enough" verdict could conceal unresolved alternate exits. The forbidden driveway turn still fails at the 80% destination, with the 35% destination inconclusive. This is an accuracy improvement in reporting, not an engine repair.
+
+The existing full-pass fake-router test was also corrected to supply test routes for **all four** exits instead of leaving two untested. Any known engine-unsupported type is now classified as such even when its probes are all unroutable or inconclusive. Neither adjustment changes routing behaviour in the Android app or clears the release gate.

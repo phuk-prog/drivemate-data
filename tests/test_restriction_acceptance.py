@@ -84,6 +84,13 @@ class EngineLimitationTests(unittest.TestCase):
         self.assertEqual(30, report["engine_unsupported"][0]["relation"])
         self.assertFalse(report["accepted"])  # unsupported is a safety blocker, not accepted
         self.assertIn("only_u_turn", ra.summary_markdown(report))
+        # The graph-builder limitation persists even when all probes find no
+        # route, otherwise a real but untested only_u_turn could disappear.
+        unroutable = run([rel(32, members(SOUTH, SOUTH), restriction="only_u_turn")],
+                         FakeRouter({}))
+        self.assertEqual(1, unroutable["counts"]["engine_unsupported"])
+        self.assertEqual(0, unroutable["counts"]["no_route"])
+        self.assertFalse(unroutable["accepted"])
         # An ordinary restriction failing alongside it still rejects the run.
         both = run([rel(30, members(SOUTH, SOUTH), restriction="only_u_turn"), rel(31, members())],
                    FakeRouter({**DIRECT, NORTH: [edge(SOUTH, 2), edge(NORTH, 4)],
@@ -195,12 +202,20 @@ class OnlyTurnTests(unittest.TestCase):
         self.assertEqual([EAST], [p["target_way"] for p in bad])
 
     def test_only_straight_on_mandated_route_and_detours_pass(self):
+        # A full PASS requires all four exits to have actual decoded routes.
+        # The previous fixture omitted SOUTH and WEST yet expected PASS.
+        legal_route = [edge(SOUTH, 2), edge(NORTH, 4)]
+        around = [edge(SOUTH, 2), edge(NORTH, 4), edge(NORTH, 2)]
         report = self.only({
-            NORTH: [edge(SOUTH, 2), edge(NORTH, 4)],
-            EAST: [edge(SOUTH, 2), edge(NORTH, 4), edge(20, 6), edge(21, 3), edge(EAST, 2)],
+            NORTH: legal_route,
+            EAST: [*around, edge(EAST, 3)],
+            SOUTH: [*around, edge(SOUTH, 1)],
+            WEST: [*around, edge(WEST, 5)],
         })
         self.assertEqual(1, report["counts"]["pass"])
         self.assertEqual(0, report["counts"]["fail"])
+        self.assertEqual(0, report["counts"]["inconclusive"])
+        self.assertEqual(0, report["counts"]["no_route"])
 
     def test_only_turn_mixed_success_and_inconclusive_is_not_a_pass(self):
         result = self.only({
@@ -211,9 +226,9 @@ class OnlyTurnTests(unittest.TestCase):
         })
         self.assertEqual(0, result["counts"]["pass"])
         self.assertEqual(1, result["counts"]["inconclusive"])
-        self.assertEqual("inconclusive", result["inconclusive_examples"][0]["probes"][3]["status"]
-                         if result["inconclusive_examples"][0]["probes"][3]["target_way"] == WEST
-                         else "inconclusive")
+        western_probe = next(p for p in result["inconclusive_examples"][0]["probes"]
+                             if p["target_way"] == WEST)
+        self.assertEqual("inconclusive", western_probe["status"])
 
     def test_only_turn_mixed_success_and_no_route_is_not_a_pass(self):
         result = self.only({NORTH: [edge(SOUTH, 2), edge(NORTH, 4)]})
