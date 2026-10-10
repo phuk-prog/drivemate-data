@@ -18,7 +18,7 @@ approved until they say so.
 
 1. Approve OSM and OS Open Names publication with the credits above (recommended: yes).
 2. Approve Overture places once the licence texts and NOTICE ship with the release (recommended: yes, after that change), or drop Overture.
-3. **Mapillary:** stop using Mapillary-derived values in the app and the release, pause the Mapillary workflow steps, and remove the published caches. Recommended: yes. Note that the scheduled weekly build on `main` still includes Mapillary steps. Changing `main` needs the owner's approval.
+3. **Mapillary:** stop using Mapillary-derived values in the app and the release, pause the Mapillary workflow steps, and remove the published caches. Recommended: yes. Checked: the scheduled weekly build on `main` (the one that publishes to phones) has no Mapillary steps. They exist only on the development branch's manual, non-validation runs, and the 10 October validation build skipped them.
 4. Northern Ireland postcodes: ask LPS in writing (a draft can be prepared), or accept none offline.
 
 Not checked: the app's current attribution screens, and whether vector tiles legally count as a produced work or a database (the actions above cover both).
