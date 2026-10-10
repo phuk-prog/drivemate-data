@@ -30,11 +30,11 @@ def rel(ident, kind, from_way=SOUTH, to_way=EAST):
     return "r%d Ttype=restriction,restriction=%s Mw%d@from,n2@via,w%d@to" % (ident, kind, from_way, to_way)
 
 
-def index(relations=(), north_tags=None):
+def index(relations=(), north_tags=None, rewritten=frozenset()):
     lines = [way(SOUTH, [1, 2]), way(EAST, [2, 3]), way(NORTH, [2, 4], **(north_tags or {})),
              way(WEST, [2, 5])]
     parsed = [ra.parse_relation(r) for r in relations]
-    return rc.OsmIndex(ra.load_ways(lines), parsed, dict(COORDS))
+    return rc.OsmIndex(ra.load_ways(lines), parsed, dict(COORDS), rewritten)
 
 
 def node_route(nodes, idx, distance=1000.0):
@@ -118,6 +118,17 @@ class Flags(unittest.TestCase):
                                     FakeRouter("osrm", node_route([1, 2, 1], idx))], idx)
         self.assertEqual(report["known_routing_safety_blockers"], 1)
         self.assertFalse(report["accepted"])
+
+    def test_rewritten_only_u_turn_is_enforced_and_still_checked(self):
+        idx = index([rel(502, "only_u_turn", to_way=SOUTH)], rewritten={("only_u_turn", 502)})
+        self.assertEqual(idx.unsupported_relations, [])
+        ok = rc.run([JOURNEY], [FakeRouter("valhalla", node_route([1, 2, 1], idx)),
+                                FakeRouter("osrm", node_route([1, 2, 1], idx))], idx)
+        self.assertEqual(ok["known_routing_safety_blockers"], 0)
+        # If the rewrite did not take effect, the turn it forbids is still caught.
+        bad = rc.run([JOURNEY], [FakeRouter("valhalla", node_route([1, 2, 5], idx)),
+                                 FakeRouter("osrm", node_route([1, 2, 1], idx))], idx)
+        self.assertFalse(bad["accepted"])
 
     def test_oneway_violation_node_and_coordinate_routes(self):
         idx = index(north_tags={"oneway": "-1"})  # only drivable 4 -> 2

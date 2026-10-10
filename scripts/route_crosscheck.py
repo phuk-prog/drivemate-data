@@ -194,8 +194,10 @@ class Restriction:
 class OsmIndex:
     """Highway ways, node coordinates, node-pair to way lookup and selected restrictions."""
 
-    def __init__(self, ways, relations, coords):
+    def __init__(self, ways, relations, coords, rewritten=frozenset()):
         self.ways, self.coords = ways, coords
+        # (restriction, relation id) pairs restriction_rewrite.py turned into enforced no_* relations.
+        self.rewritten = frozenset(rewritten)
         self.pairs = {}
         self.edges = {}  # (u, v) -> {way: {FORWARD/BACKWARD as walked u -> v}}, both orders stored
         for wid, (_, nodes) in ways.items():
@@ -240,7 +242,7 @@ class OsmIndex:
             return None
         kind = tags["restriction"]
         return Restriction(ident, kind, from_way, via, to_way, self.coords[via], headings,
-                           kind in ra.ENGINE_UNSUPPORTED)
+                           kind in ra.ENGINE_UNSUPPORTED and (kind, ident) not in self.rewritten)
 
     def way_for_pair(self, u, v):
         return self.pairs.get((min(u, v), max(u, v)))
@@ -297,10 +299,10 @@ def _position(points, p, tolerance=15.0):
     return best_pos if best is not None and best <= tolerance else None
 
 
-def load_index(opl):
+def load_index(opl, rewritten=frozenset()):
     ways, relations = ra.read_opl(opl)
     wanted = {n for _, nodes in ways.values() for n in nodes}
-    return OsmIndex(ways, relations, ra.read_node_coords(opl, wanted))
+    return OsmIndex(ways, relations, ra.read_node_coords(opl, wanted), rewritten)
 
 
 # --------------------------------------------------------------------------- engines
@@ -723,6 +725,9 @@ def main(argv=None):
     p.add_argument("--markdown", type=Path)
     p.add_argument("--summary", type=Path, help="append Markdown here (e.g. $GITHUB_STEP_SUMMARY)")
     p.add_argument("--top", type=int, default=25)
+    p.add_argument("--rewrite-report", type=Path,
+                   help="restriction_rewrite.py report for --pbf; rewritten only_u_turn relations are then "
+                        "treated as enforced (and still checked on every route)")
     args = p.parse_args(argv)
     if args.journeys < 0 or args.ratio <= 1.0:
         p.error("--journeys must be >= 0 and --ratio > 1")
@@ -737,7 +742,15 @@ def main(argv=None):
             ra.pbf_to_opl(args.pbf, opl)
         elif not opl.is_file():
             p.error("OPL not found")
-        index = load_index(opl)
+        rewritten = frozenset()
+        if args.rewrite_report is not None:
+            if args.pbf is None:
+                p.error("--rewrite-report needs --pbf (its SHA-256 is checked against the report)")
+            try:
+                rewritten = frozenset(ra.load_rewrite_report(args.rewrite_report, ra.file_sha256(args.pbf)))
+            except (ValueError, OSError) as error:
+                p.error(f"rewrite report rejected: {error}")
+        index = load_index(opl, rewritten)
     osrm = OsrmRouter(args.osrm_url, index)
     routers = [ValhallaRouter(args.graph), osrm]
     report = run(generate_journeys(args.journeys, args.seed), routers, index, args.ratio,

@@ -117,6 +117,7 @@ jobs:
           work/vh/bin/python scripts/route_crosscheck.py \
             --pbf work/base.osm.pbf --graph work/gm.tar --osrm-url http://127.0.0.1:5000 \
             --journeys "$JOURNEYS" --source-sha256 "$(cat work/source.sha256)" \
+            --rewrite-report work/restriction-rewrite.json \
             --report work/route-crosscheck.json --markdown work/route-crosscheck.md \
             --summary "$GITHUB_STEP_SUMMARY"
 
