@@ -130,3 +130,7 @@ does not enforce a restriction when the route's destination lies on the
 restricted `to` edge. Practical impact: only when navigating to that exact
 private driveway. It needs a human decision: either confirm on the ground or
 in street photos and accept it, or add an app-side guard. Nothing was changed.
+
+## Safety gate: known engine defects never counted as resolved
+
+The machine-readable report now includes known_routing_safety_blockers, the sum of confirmed failed probes and unsupported engine restriction types. The existing limited-scope `accepted` field still means zero detected probe failures, but it is not a production release certificate: unsupported `only_u_turn` cases remain safety blockers even on a green probe run. Skipped and inconclusive restrictions also need separate evidence. The r14551046 prohibited left turn remains a confirmed failing case pending an actual supported routing fix; do not whitelist or downgrade it.

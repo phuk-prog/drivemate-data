@@ -561,6 +561,7 @@ def run(ways, relations, coords_loader, router, region):
         "failures": failures, "no_route_examples": examples["no_route"],
         "inconclusive_examples": examples["inconclusive"],
         "accepted": counts.get("fail", 0) == 0,
+        "known_routing_safety_blockers": counts.get("fail", 0) + counts.get("engine_unsupported", 0),
         "scope": ("Routing-engine compliance with simple node-via OSM restrictions for auto costing. "
                   "Detection only: no data is repaired, invented or uploaded."),
         "limitations": [
@@ -593,6 +594,7 @@ def summary_markdown(report):
         for f in report["failures"][:50]:
             lines.append(f"| [r{f['relation']}]({f['osm_url']}) | {f['restriction']} | "
                          f"w{f['from_way']} | n{f['via_node']} | w{f['to_way']} |")
+    lines += ["", "**Known routing-safety blockers: " + str(report["known_routing_safety_blockers"]) + "** (failed restriction probes and unsupported engine restrictions; other skipped/inconclusive cases are not cleared)."]
     lines += ["", "Accepted: **" + ("yes" if report["accepted"] else "NO") + "**. "
               "Detection only; OSM correctness and signage are not verified."]
     return "\n".join(lines) + "\n"

@@ -80,6 +80,7 @@ class EngineLimitationTests(unittest.TestCase):
         report = run([rel(30, members(SOUTH, SOUTH), restriction="only_u_turn")], ignoring)
         self.assertEqual(0, report["counts"]["fail"])
         self.assertEqual(1, report["counts"]["engine_unsupported"])
+        self.assertEqual(1, report["known_routing_safety_blockers"])
         self.assertEqual(30, report["engine_unsupported"][0]["relation"])
         self.assertTrue(report["accepted"])
         self.assertIn("only_u_turn", ra.summary_markdown(report))
@@ -102,6 +103,7 @@ class NoTurnTests(unittest.TestCase):
         report = run([rel(2, members())], FakeRouter(DIRECT))
         self.assertEqual(1, report["counts"]["fail"])
         self.assertFalse(report["accepted"])
+        self.assertEqual(1, report["known_routing_safety_blockers"])
         failure = report["failures"][0]
         self.assertEqual((2, "no_right_turn", SOUTH, 2, EAST), (
             failure["relation"], failure["restriction"], failure["from_way"],
