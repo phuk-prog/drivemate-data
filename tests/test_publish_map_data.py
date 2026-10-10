@@ -65,8 +65,13 @@ class FakeGitHub:
         return path
 
     def delete(self, asset):
-        self.actions.append(('delete', publisher.LEGACY, asset['name']))
-        del self.files[publisher.LEGACY][asset['name']]
+        for tag, assets in self.files.items():
+            if assets.get(asset['name']) is not None and \
+                    self.asset_ids.get((tag, asset['name'])) == asset['id']:
+                self.actions.append(('delete', tag, asset['name']))
+                del assets[asset['name']]
+                return
+        raise AssertionError('Unknown asset deleted')
 
 
 class PublisherTest(unittest.TestCase):
@@ -498,3 +503,32 @@ class RateLimitResumeTest(unittest.TestCase):
         with patch.object(publisher.subprocess, 'run', return_value=limited):
             with self.assertRaises(publisher.RateLimited):
                 gh.run('release', 'upload', 'map-data-x', 'f')
+
+
+class IncompleteUploadTest(unittest.TestCase):
+    def test_cut_off_upload_is_deleted_and_uploaded_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            files = {}
+            for i in range(3):
+                path = Path(tmp) / f'lanes-{i}_1.json'
+                path.write_text('{"ways": []}' + ' ' * i)
+                files[path.name] = path
+            gh = FakeGitHub()
+            tag = 'map-data-test-2'
+            gh.files[tag] = {'lanes-0_1.json': files['lanes-0_1.json'].read_bytes()[:3]}
+            real_inventory = gh.inventory
+
+            def inventory(t):
+                assets = real_inventory(t)
+                if t == tag and 'lanes-0_1.json' in assets and len(gh.files[tag]['lanes-0_1.json']) == 3:
+                    assets['lanes-0_1.json'].update(state='starter', digest=None)
+                return assets
+            gh.inventory = inventory
+            with patch.object(publisher.time, 'sleep'):
+                publisher.upload_immutable(gh, tag, files)
+            self.assertIn(('delete', tag, 'lanes-0_1.json'), gh.actions)
+            self.assertEqual(files['lanes-0_1.json'].read_bytes(), gh.files[tag]['lanes-0_1.json'])
+
+    def test_live_pointer_release_is_never_cleaned(self):
+        with self.assertRaises(ValueError):
+            publisher.settle_inventory(FakeGitHub(), publisher.LEGACY, {})

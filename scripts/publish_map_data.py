@@ -300,13 +300,37 @@ def verify_inventory(assets, expected, tag, exact=False):
             raise ValueError(f'Asset verification failed: {name}')
 
 
+def settle_inventory(github, tag, existing, attempts=6, pause=10):
+    """Make a new immutable release's inventory trustworthy before resuming uploads.
+
+    An upload cut off part-way (e.g. by the API rate limit) leaves an asset whose state is
+    not "uploaded" and which has no digest: delete it so it is uploaded again. GitHub may also
+    take a few seconds to report the digest of a just-finished upload, so wait for it
+    rather than fail. Only ever called for a release being built, never the legacy pointer.
+    """
+    if tag == LEGACY:
+        raise ValueError('Never clean up the live pointer release')
+    for attempt in range(attempts):
+        broken = [a for a in existing.values() if a.get('state', 'uploaded') != 'uploaded']
+        for asset in broken:
+            github.delete(asset)
+        pending = [n for n, a in existing.items()
+                   if a.get('state', 'uploaded') == 'uploaded' and not a.get('digest')]
+        if not broken and not pending:
+            return existing
+        if attempt + 1 < attempts:
+            time.sleep(pause)
+        existing = github.inventory(tag)
+    raise ValueError('GitHub asset digest unavailable or invalid')
+
+
 def upload_immutable(github, tag, files):
     checked_tag(tag)
     if tag == LEGACY or len(files) > ASSET_LIMIT:
         raise ValueError('Invalid immutable release or too many assets')
     wanted = {name: metadata(path, tag) for name, path in files.items()}
     github.ensure_release(tag)
-    existing = github.inventory(tag)
+    existing = settle_inventory(github, tag, github.inventory(tag))
     if not set(existing) <= set(wanted):
         raise ValueError('Immutable release contains unexpected assets')
     for name in existing:
@@ -328,7 +352,7 @@ def upload_immutable(github, tag, files):
             waits += 1
             github.wait_for_rate_limit()
             # A batch may have partly uploaded: re-check before resuming, and verify what is there.
-            existing = github.inventory(tag)
+            existing = settle_inventory(github, tag, github.inventory(tag))
             if not set(existing) <= set(wanted):
                 raise ValueError('Immutable release contains unexpected assets')
             for name in existing:
