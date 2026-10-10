@@ -187,3 +187,11 @@ not visible among this account's Claude routines (it is described above as a
 ChatGPT task); no duplicate automation was created.
 
 Data preflight on this branch: 125 unit tests and five selftests pass.
+
+**Whole-UK exporter stress test (local, unpublished):** all 207 archives
+(base + 206 regions) were exported from the verified UK archive in 18 s and
+every one passed `verify_pmtiles.py` (0 failures, 164 s total). All 957,592
+source tiles were accounted for exactly once, with every payload compared
+byte-for-byte. The largest real package is 143,577,563 bytes. This tests the
+shared exporter only. It is not a ledger entry: ledger completions still
+require a GitHub workflow run once bulk expansion is approved.
