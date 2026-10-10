@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "enabled": false,
+  "sequence": 0,
+  "reason": "Hold bulk regional expansion until all shared-code and Manchester native-renderer gates pass; schedule will advance this counter only after approval gates."
+}

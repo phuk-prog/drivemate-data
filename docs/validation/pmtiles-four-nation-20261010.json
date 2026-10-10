@@ -1,0 +1,141 @@
+{
+  "scope": "Four-nation z14 tile decoding and OpenMapTiles layer samples; not comprehensive geometry or address verification",
+  "decoder_versions": {
+    "pmtiles": "3.4.1",
+    "mapbox-vector-tile": "2.2.0"
+  },
+  "samples": {
+    "England": {
+      "zxy": [
+        14,
+        8089,
+        5300
+      ],
+      "layer_feature_counts": {
+        "boundary": 1,
+        "building": 206,
+        "housenumber": 377,
+        "landcover": 979,
+        "landuse": 69,
+        "place": 32,
+        "poi": 5008,
+        "transportation": 869,
+        "transportation_name": 478,
+        "water": 27,
+        "water_name": 14,
+        "waterway": 45
+      }
+    },
+    "Scotland": {
+      "zxy": [
+        14,
+        7998,
+        5112
+      ],
+      "layer_feature_counts": {
+        "building": 30,
+        "housenumber": 219,
+        "landcover": 148,
+        "landuse": 38,
+        "mountain_peak": 7,
+        "park": 1,
+        "place": 47,
+        "poi": 2062,
+        "transportation": 328,
+        "transportation_name": 227,
+        "water": 19,
+        "water_name": 7,
+        "waterway": 8
+      }
+    },
+    "Wales": {
+      "zxy": [
+        14,
+        8047,
+        5449
+      ],
+      "layer_feature_counts": {
+        "boundary": 1,
+        "building": 31,
+        "housenumber": 346,
+        "landcover": 458,
+        "landuse": 167,
+        "park": 1,
+        "place": 25,
+        "poi": 3736,
+        "transportation": 378,
+        "transportation_name": 276,
+        "water": 13,
+        "water_name": 2,
+        "waterway": 22
+      }
+    },
+    "Northern Ireland": {
+      "zxy": [
+        14,
+        7922,
+        5214
+      ],
+      "layer_feature_counts": {
+        "boundary": 1,
+        "building": 109,
+        "housenumber": 302,
+        "landcover": 134,
+        "landuse": 44,
+        "place": 37,
+        "poi": 2322,
+        "transportation": 306,
+        "transportation_name": 250,
+        "water": 5,
+        "water_name": 6,
+        "waterway": 4
+      }
+    }
+  },
+  "header": {
+    "version": 3,
+    "root_offset": 127,
+    "root_length": 312,
+    "metadata_offset": 1637890837,
+    "metadata_length": 1502,
+    "leaf_directory_offset": 1637892339,
+    "leaf_directory_length": 549236,
+    "tile_data_offset": 16384,
+    "tile_data_length": 1637874453,
+    "addressed_tiles_count": 957592,
+    "tile_entries_count": 252138,
+    "tile_contents_count": 221293,
+    "clustered": true,
+    "internal_compression": 2,
+    "tile_compression": 2,
+    "tile_type": 1,
+    "min_zoom": 0,
+    "max_zoom": 14,
+    "min_lon_e7": -148584980,
+    "min_lat_e7": 494191999,
+    "max_lon_e7": 26417860,
+    "max_lat_e7": 611356400,
+    "center_zoom": 5,
+    "center_lon_e7": -61083560,
+    "center_lat_e7": 552774200
+  },
+  "metadata_attribution": "<a href=\"https://www.openmaptiles.org/\" target=\"_blank\">&copy; OpenMapTiles</a> <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\">&copy; OpenStreetMap contributors</a>",
+  "vector_layer_ids": [
+    "aerodrome_label",
+    "aeroway",
+    "boundary",
+    "building",
+    "housenumber",
+    "landcover",
+    "landuse",
+    "mountain_peak",
+    "park",
+    "place",
+    "poi",
+    "transportation",
+    "transportation_name",
+    "water",
+    "water_name",
+    "waterway"
+  ]
+}

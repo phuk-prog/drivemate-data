@@ -1,0 +1,534 @@
+import copy
+import gzip
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+import unittest.mock
+
+spec = importlib.util.spec_from_file_location('publisher', Path(__file__).resolve().parents[1] / 'scripts/publish_map_data.py')
+publisher = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(publisher)
+
+
+def write_places_provenance(out, **changes):
+    """Sidecar matching setUp's single synthetic place tile."""
+    document = publisher.places_provenance.build(
+        {'osm': 1}, {'osm': 1}, {}, 1, None, False, 'unavailable')
+    document.update(changes)
+    path = Path(out) / 'places-provenance.json'
+    path.write_text(json.dumps(document))
+    return path
+
+
+class FakeGitHub:
+    def __init__(self):
+        self.files = {publisher.LEGACY: {}}
+        self.actions = []
+        self.corrupt = None
+        self.fail_upload = None
+        self.downloads = {}
+        self.asset_ids = {}
+
+    def ensure_release(self, tag):
+        self.files.setdefault(tag, {})
+        self.actions.append(('ensure', tag))
+
+    def inventory(self, tag):
+        assets = {}
+        for name, data in self.files[tag].items():
+            asset_id = self.asset_ids.setdefault((tag, name), len(self.asset_ids) + 1)
+            digest = hashlib.sha256(data).hexdigest()
+            if (tag, name) == self.corrupt:
+                digest = '0' * 64
+            assets[name] = {'id': asset_id, 'name': name, 'size': len(data), 'digest': 'sha256:' + digest}
+        return copy.deepcopy(assets)
+
+    def upload(self, tag, path, mutable=False):
+        name = Path(path).name
+        self.actions.append(('upload', tag, name, mutable))
+        if (tag, name) == self.fail_upload:
+            raise publisher.GitHubError('Synthetic upload failure')
+        if name in self.files[tag] and not mutable:
+            raise AssertionError('Immutable asset overwrite attempted')
+        self.files[tag][name] = Path(path).read_bytes()
+
+    def download(self, tag, name, directory):
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / name
+        path.write_bytes(self.downloads.get((tag, name), self.files[tag][name]))
+        self.actions.append(('download', tag, name))
+        return path
+
+    def delete(self, asset):
+        for tag, assets in self.files.items():
+            if assets.get(asset['name']) is not None and \
+                    self.asset_ids.get((tag, asset['name'])) == asset['id']:
+                self.actions.append(('delete', tag, asset['name']))
+                del assets[asset['name']]
+                return
+        raise AssertionError('Unknown asset deleted')
+
+
+class PublisherTest(unittest.TestCase):
+    def test_reconciled_navigation_assets_are_verified_and_preserved(self):
+        documents = {'limits-106_-5.json': {'ways': []},
+                     'roadinfo-106_-5.json': {'elements': []},
+                     'charge-zones-uk.json': {'zones': []},
+                     'build-quality.json': {'errors': []}}
+        for name, document in documents.items():
+            (self.out / name).write_text(json.dumps(document))
+        with gzip.open(self.out / 'search-offline-uk.tsv.gz', 'wt') as stream:
+            stream.write('#drivemate-search-offline\t1\t2026-10-09\tSynthetic credits\n'
+                         'sw1a1aa\tP\t\tLondon\t51.5\t-0.1\n')
+        spec = importlib.util.spec_from_file_location(
+            'source_inventory', Path(__file__).resolve().parents[1] / 'scripts/source_inventory.py')
+        inventory = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inventory)
+        source_file = self.out.parent / 'synthetic.osm.pbf'
+        source_file.write_bytes(b'synthetic source')
+        inputs = {k: self.out.parent / (k + '.missing') for k in inventory.SOURCES if k != 'osm_uk'}
+        provenance = inventory.build(source_file,
+            'https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf', inputs)
+        (self.out / 'source-inventory.json').write_text(json.dumps(provenance))
+        write_places_provenance(self.out)
+        spec = importlib.util.spec_from_file_location(
+            'publication_consistency', Path(__file__).resolve().parents[1] / 'scripts/publication_consistency.py')
+        binder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(binder)
+        (self.out / 'build-quality.json').write_text(json.dumps({
+            'errors': [], 'asset_snapshot': binder.snapshot_assets(self.out)}))
+        publisher.publish(self.github, self.out, 'map-data-navigation', navigation_data=True)
+        manifest = json.loads(self.github.files['map-data-navigation']['manifest.json'])
+        self.assertTrue(set(documents) <= manifest['files'].keys())
+        self.assertIn('search-offline-uk.tsv.gz', manifest['files'])
+        self.assertIn('source-inventory.json', manifest['files'])
+        self.assertEqual('source-inventory.json', manifest['source_inventory']['asset'])
+        self.assertEqual(hashlib.sha256((self.out / 'source-inventory.json').read_bytes()).hexdigest(),
+                         manifest['source_inventory']['sha256'])
+        self.assertIn('places-provenance.json', manifest['files'])
+        repo = Path(__file__).resolve().parents[1] / 'licenses'
+        for name in publisher.LICENSE_ASSETS:
+            self.assertEqual(hashlib.sha256((repo / name).read_bytes()).hexdigest(),
+                             manifest['files'][name]['sha256'])
+            self.assertIn(name, self.github.files['map-data-navigation'])
+
+    def test_navigation_publish_requires_licence_files_before_upload(self):
+        self.prepare_navigation_sample()
+        with tempfile.TemporaryDirectory() as empty:
+            with self.assertRaisesRegex(ValueError, 'Licence file missing'):
+                publisher.publish(self.github, self.out, 'map-data-nolicence',
+                                  navigation_data=True, licenses_dir=empty)
+        self.assertEqual([], self.github.actions)
+
+    def test_licence_files_come_from_repo_not_build_output(self):
+        self.prepare_navigation_sample()
+        (self.out / 'NOTICE.md').write_text('tampered')
+        binder_path = Path(__file__).resolve().parents[1] / 'scripts/publication_consistency.py'
+        spec = importlib.util.spec_from_file_location('publication_consistency', binder_path)
+        binder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(binder)
+        (self.out / 'build-quality.json').write_text(json.dumps({
+            'errors': [], 'asset_snapshot': binder.snapshot_assets(self.out)}))
+        publisher.publish(self.github, self.out, 'map-data-licence-source', navigation_data=True)
+        repo = Path(__file__).resolve().parents[1] / 'licenses' / 'NOTICE.md'
+        self.assertEqual(repo.read_bytes(), self.github.files['map-data-licence-source']['NOTICE.md'])
+
+    def test_navigation_publish_requires_places_provenance_sidecar(self):
+        self.prepare_navigation_sample()
+        (self.out / 'places-provenance.json').unlink()
+        with self.assertRaisesRegex(ValueError, 'provenance sidecar missing'):
+            publisher.publish(self.github, self.out, 'map-data-no-provenance', navigation_data=True)
+        self.assertEqual([], self.github.actions)
+
+    def test_places_provenance_sidecar_is_allowed_and_structurally_validated(self):
+        write_places_provenance(self.out)
+        self.assertIn('places-provenance.json', publisher.local_files(self.out))
+        for changes in ({'schema': 2}, {'rights_review_status': 'cleared'},
+                        {'records_by_primary_source': {'overture': 0, 'osm': -1, 'osnames': 2}},
+                        {'records_by_primary_source': {'overture': 0, 'osm': '1', 'osnames': 0}},
+                        {'total_records': 7}, {'sources': {}}):
+            write_places_provenance(self.out, **changes)
+            with self.assertRaises(ValueError):
+                publisher.local_files(self.out)
+        (self.out / 'places-provenance.json').write_text('[]')
+        with self.assertRaises(ValueError):
+            publisher.local_files(self.out)
+
+    def test_sidecar_alone_does_not_count_as_place_tiles(self):
+        write_places_provenance(self.out)
+        (self.out / 'places-212_-9.json.gz').unlink()
+        with self.assertRaisesRegex(ValueError, 'place tiles missing'):
+            publisher.local_files(self.out)
+
+    def test_stale_quality_report_cannot_publish_changed_map_assets(self):
+        # Build a valid miniature navigation bundle without contacting GitHub.
+        self.prepare_navigation_sample()
+        (self.out / 'cameras-uk.json').write_text('{"elements": [{"id": 1}]}')
+        with self.assertRaisesRegex(ValueError, "differs from passed quality"):
+            publisher.publish(self.github, self.out, 'map-data-tampered', navigation_data=True)
+        self.assertEqual([], self.github.actions)
+
+    def test_bare_pass_quality_report_no_longer_authorizes_release(self):
+        self.prepare_navigation_sample()
+        (self.out / 'build-quality.json').write_text(json.dumps({'errors': []}))
+        with self.assertRaisesRegex(ValueError, "quality asset snapshot"):
+            publisher.publish(self.github, self.out, 'map-data-stale', navigation_data=True)
+        self.assertEqual([], self.github.actions)
+
+    def test_added_valid_region_after_quality_report_blocks_release(self):
+        self.prepare_navigation_sample()
+        (self.out / 'lanes-107_-5.json').write_text('{"ways": []}')
+        with self.assertRaisesRegex(ValueError, "inventory changed"):
+            publisher.publish(self.github, self.out, 'map-data-extra', navigation_data=True)
+        self.assertEqual([], self.github.actions)
+
+    def prepare_navigation_sample(self):
+        # The real map workflow writes this immediately before publication.
+        for name, data in {
+            'limits-106_-5.json': {'ways': []},
+            'roadinfo-106_-5.json': {'elements': []},
+            'charge-zones-uk.json': {'zones': []},
+        }.items():
+            (self.out / name).write_text(json.dumps(data))
+        with gzip.open(self.out / 'search-offline-uk.tsv.gz', 'wt') as stream:
+            stream.write('#drivemate-search-offline\t1\t2026-10-09\tSynthetic credits\n'
+                         'sw1a1aa\tP\t\tLondon\t51.5\t-0.1\n')
+        spec = importlib.util.spec_from_file_location(
+            'source_inventory', Path(__file__).resolve().parents[1] / 'scripts/source_inventory.py')
+        inventory = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inventory)
+        source_file = self.out.parent / 'synthetic.osm.pbf'
+        source_file.write_bytes(b'synthetic source')
+        inputs = {k: self.out.parent / (k + '.missing')
+                  for k in inventory.SOURCES if k != 'osm_uk'}
+        provenance = inventory.build(
+            source_file,
+            'https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf', inputs)
+        (self.out / 'source-inventory.json').write_text(json.dumps(provenance))
+        write_places_provenance(self.out)
+        spec = importlib.util.spec_from_file_location(
+            'publication_consistency', Path(__file__).resolve().parents[1] / 'scripts/publication_consistency.py')
+        binder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(binder)
+        (self.out / 'build-quality.json').write_text(json.dumps({
+            'errors': [], 'asset_snapshot': binder.snapshot_assets(self.out)}))
+
+    def test_missing_navigation_datasets_stop_before_upload(self):
+        with self.assertRaisesRegex(ValueError, 'navigation datasets missing'):
+            publisher.publish(self.github, self.out, 'map-data-incomplete', navigation_data=True)
+        self.assertEqual([], self.github.actions)
+
+    def test_corrupt_offline_search_stops_before_any_upload(self):
+        (self.out / 'search-offline-uk.tsv.gz').write_bytes(b'not gzip')
+        with self.assertRaises(OSError):
+            publisher.publish(self.github, self.out, 'map-data-broken-search')
+        self.assertEqual([], self.github.actions)
+
+    def test_failing_quality_report_stops_before_any_upload(self):
+        (self.out / 'build-quality.json').write_text('{"errors": ["missing data"]}')
+        with self.assertRaisesRegex(ValueError, 'quality report'):
+            publisher.publish(self.github, self.out, 'map-data-broken-quality')
+        self.assertEqual([], self.github.actions)
+
+    def test_pointer_recovers_after_clobber_deletes_previous_asset(self):
+        self.legacy(count=4, pointer=True)
+        previous = self.github.files[publisher.LEGACY]['latest.json']
+        upload = self.github.upload
+        failed = False
+
+        def interrupted_upload(tag, path, mutable=False):
+            nonlocal failed
+            if tag == publisher.LEGACY and Path(path).name == 'latest.json' and not failed:
+                failed = True
+                del self.github.files[tag]['latest.json']
+                raise publisher.GitHubError('Interrupted after deleting old pointer')
+            return upload(tag, path, mutable)
+
+        with patch.object(self.github, 'upload', side_effect=interrupted_upload):
+            with self.assertRaisesRegex(publisher.GitHubError, 'Interrupted'):
+                publisher.publish(self.github, self.out, 'map-data-recovery')
+        self.assertEqual(previous, self.github.files[publisher.LEGACY]['latest.json'])
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.out = Path(self.temporary.name) / 'out'
+        self.out.mkdir()
+        self.min_size = patch.object(publisher, 'MIN_MAP_BYTES', 20)
+        self.min_size.start()
+        self.addCleanup(self.min_size.stop)
+        (self.out / 'drivemate.pmtiles').write_bytes(b'PMTiles' + b'x' * 30)
+        (self.out / 'build-info.txt').write_text('Synthetic test data\n')
+        (self.out / 'cameras-uk.json').write_text('{"elements": []}')
+        (self.out / 'lanes-106_-5.json').write_text('{"ways": []}')
+        with gzip.open(self.out / 'places-212_-9.json.gz', 'wt') as stream:
+            json.dump([['Synthetic place', '', '', 53.0, -2.0]], stream)
+        self.github = FakeGitHub()
+
+    def legacy(self, count=3, pointer=False):
+        data = {'drivemate.pmtiles': b'PMTiles' + b'x' * 30, 'build-info.txt': b'Synthetic legacy build\n',
+                'lanes-106_-5.json': b'{"ways": []}'}
+        if pointer:
+            data['latest.json'] = b'{"tag": "map-data-old"}'
+        for i in range(count - len(data)):
+            data[f'places-{i}_0.json.gz'] = b'synthetic inventory bytes'
+        self.github.files[publisher.LEGACY] = data
+
+    def test_standard_publish_verifies_every_asset_then_switches_pointer(self):
+        publisher.publish(self.github, self.out, 'map-data-test')
+        main = self.github.files['map-data-test']
+        manifest = json.loads(main['manifest.json'])
+        self.assertEqual(1, manifest['schema'])
+        for name, meta in manifest['files'].items():
+            self.assertEqual({'sha256': hashlib.sha256(main[name]).hexdigest(), 'bytes': len(main[name]),
+                              'tag': 'map-data-test'}, meta)
+        pointer = json.loads(self.github.files[publisher.LEGACY]['latest.json'])
+        self.assertEqual(hashlib.sha256(main['manifest.json']).hexdigest(), pointer['manifest_sha256'])
+        self.assertEqual(('upload', publisher.LEGACY, 'latest.json', False), self.github.actions[-1])
+        # Exactly matching immutable assets support safe restart without clobbering data.
+        self.github.actions.clear()
+        publisher.publish(self.github, self.out, 'map-data-test')
+        self.assertEqual([('upload', publisher.LEGACY, 'latest.json', True)],
+                         [action for action in self.github.actions if action[0] == 'upload'])
+
+    def test_split_release_manifest_names_the_release_for_every_file(self):
+        with patch.object(publisher, 'MAIN_FILES', 3):
+            publisher.publish(self.github, self.out, 'map-data-split')
+        main = self.github.files['map-data-split']
+        extra = self.github.files['map-data-split-extra']
+        self.assertEqual(3 + 1, len(main))
+        self.assertEqual(2, len(extra))
+        self.assertIn('drivemate.pmtiles', main)
+        self.assertIn('build-info.txt', main)
+        manifest = json.loads(main['manifest.json'])
+        self.assertEqual(set(main) - {'manifest.json'} | set(extra), set(manifest['files']))
+        for name, meta in manifest['files'].items():
+            self.assertIn(name, self.github.files[meta['tag']])
+        self.assertEqual('map-data-split-extra', json.loads(self.github.files[publisher.LEGACY]['latest.json'])['extra_tag'])
+
+    def test_corrupt_upload_or_incomplete_extra_never_updates_pointer(self):
+        self.github.corrupt = ('map-data-test', 'cameras-uk.json')
+        with self.assertRaises(ValueError):
+            publisher.publish(self.github, self.out, 'map-data-test')
+        self.assertNotIn('latest.json', self.github.files[publisher.LEGACY])
+        self.github = FakeGitHub()
+        self.github.fail_upload = ('map-data-test-extra', 'places-212_-9.json.gz')
+        with patch.object(publisher, 'MAIN_FILES', 3), self.assertRaises(publisher.GitHubError):
+            publisher.publish(self.github, self.out, 'map-data-test')
+        self.assertNotIn('latest.json', self.github.files[publisher.LEGACY])
+
+    def test_existing_immutable_mismatch_and_unexpected_asset_block(self):
+        for files in ({'drivemate.pmtiles': b'wrong'}, {'unrelated.txt': b'wrong'}):
+            self.github = FakeGitHub()
+            self.github.files['map-data-test'] = files
+            with self.assertRaises(ValueError):
+                publisher.publish(self.github, self.out, 'map-data-test')
+            self.assertNotIn('latest.json', self.github.files[publisher.LEGACY])
+
+    def test_bootstrap_archives_metadata_before_freeing_one_slot_and_promoting(self):
+        self.legacy(1000)
+        old_info = self.github.files[publisher.LEGACY]['build-info.txt']
+        old_data = {k: v for k, v in self.github.files[publisher.LEGACY].items() if k != 'build-info.txt'}
+        publisher.bootstrap(self.github, 'map-data-bootstrap')
+        self.assertEqual(old_info, self.github.files['map-data-bootstrap']['build-info.txt'])
+        self.assertEqual(old_data, {k: v for k, v in self.github.files[publisher.LEGACY].items() if k != 'latest.json'})
+        manifest = json.loads(self.github.files['map-data-bootstrap']['manifest.json'])
+        self.assertTrue(manifest['inventory_snapshot'])
+        self.assertIn('partial', manifest['coverage'])
+        self.assertEqual(set(old_data), set(manifest['files']))
+        actions = self.github.actions
+        archive_at = actions.index(('upload', 'map-data-bootstrap', 'build-info.txt', False))
+        delete_at = actions.index(('delete', publisher.LEGACY, 'build-info.txt'))
+        self.assertLess(archive_at, delete_at)
+        self.assertEqual(('upload', publisher.LEGACY, 'latest.json', False), actions[-1])
+        # The pointer is now present and the build info exists only in its verified archive.
+        self.github.actions.clear()
+        publisher.bootstrap(self.github, 'map-data-bootstrap')
+        self.assertEqual(old_info, self.github.files['map-data-bootstrap']['build-info.txt'])
+        self.assertFalse(any(action[0] == 'delete' for action in self.github.actions))
+
+    def test_bootstrap_ignores_download_counts_but_rejects_data_identity_changes(self):
+        self.legacy(1000)
+        inventory = self.github.inventory
+        calls = [0]
+        def changing_counts(tag):
+            calls[0] += 1
+            assets = inventory(tag)
+            for asset in assets.values():
+                asset['download_count'] = calls[0]
+                asset['updated_at'] = str(calls[0])
+            return assets
+        self.github.inventory = changing_counts
+        publisher.bootstrap(self.github, 'map-data-bootstrap')
+        self.assertIn('latest.json', self.github.files[publisher.LEGACY])
+
+        self.github = FakeGitHub()
+        self.legacy(1000)
+        upload = self.github.upload
+        def mutate_legacy(tag, path, mutable=False):
+            upload(tag, path, mutable)
+            if tag == 'map-data-bootstrap' and Path(path).name == 'build-info.txt':
+                self.github.files[publisher.LEGACY]['lanes-106_-5.json'] = b'changed during bootstrap'
+        self.github.upload = mutate_legacy
+        with self.assertRaises(ValueError):
+            publisher.bootstrap(self.github, 'map-data-bootstrap')
+        self.assertIn('build-info.txt', self.github.files[publisher.LEGACY])
+        self.assertNotIn('latest.json', self.github.files[publisher.LEGACY])
+
+    def test_bootstrap_does_not_delete_when_pointer_present_or_slot_available(self):
+        for has_pointer in (False, True):
+            self.github = FakeGitHub()
+            self.legacy(1000 if has_pointer else 3, pointer=has_pointer)
+            publisher.bootstrap(self.github, 'map-data-bootstrap')
+            self.assertIn('build-info.txt', self.github.files[publisher.LEGACY])
+            self.assertFalse(any(action[0] == 'delete' for action in self.github.actions))
+
+    def test_bootstrap_requires_verified_archive_and_all_asset_digests(self):
+        for mode in ('download', 'archive', 'inventory'):
+            self.github = FakeGitHub()
+            self.legacy(1000)
+            if mode == 'download':
+                self.github.downloads[(publisher.LEGACY, 'build-info.txt')] = b'corrupt download'
+            elif mode == 'archive':
+                self.github.corrupt = ('map-data-bootstrap', 'build-info.txt')
+            else:
+                inventory = self.github.inventory
+                def no_digest(tag):
+                    result = inventory(tag)
+                    result['drivemate.pmtiles'].pop('digest')
+                    return result
+                self.github.inventory = no_digest
+            with self.assertRaises(ValueError):
+                publisher.bootstrap(self.github, 'map-data-bootstrap')
+            self.assertIn('build-info.txt', self.github.files[publisher.LEGACY])
+            self.assertNotIn('latest.json', self.github.files[publisher.LEGACY])
+
+    def test_malformed_local_output_symlinks_names_and_duplicate_basenames_fail(self):
+        (self.out / 'unexpected.json').write_text('{}')
+        with self.assertRaises(ValueError):
+            publisher.local_files(self.out)
+        (self.out / 'unexpected.json').unlink()
+        (self.out / 'copy').mkdir()
+        (self.out / 'copy' / 'lanes-106_-5.json').write_text('{"ways": []}')
+        with self.assertRaises(ValueError):
+            publisher.local_files(self.out)
+        (self.out / 'copy' / 'lanes-106_-5.json').unlink()
+        (self.out / 'copy' / 'linked.json').symlink_to(self.out / 'cameras-uk.json')
+        with self.assertRaises(ValueError):
+            publisher.local_files(self.out)
+        for value in ('../escape', '--evil', 'bad/name'):
+            with self.assertRaises(ValueError):
+                publisher.checked_name(value)
+            with self.assertRaises(ValueError):
+                publisher.checked_tag(value)
+        with self.assertRaises(ValueError):
+            publisher.GitHub('owner/repo/other')
+
+    def test_bad_magic_size_and_data_shapes_fail_before_upload(self):
+        map_path = self.out / 'drivemate.pmtiles'
+        map_path.write_bytes(b'not-map' + b'x' * 30)
+        with self.assertRaises(ValueError):
+            publisher.publish(self.github, self.out, 'map-data-test')
+        map_path.write_bytes(b'PMTiles')
+        with self.assertRaises(ValueError):
+            publisher.publish(self.github, self.out, 'map-data-test')
+        map_path.write_bytes(b'PMTiles' + b'x' * 30)
+        (self.out / 'cameras-uk.json').write_text('{"elements": {}}')
+        with self.assertRaises(ValueError):
+            publisher.publish(self.github, self.out, 'map-data-test')
+        self.assertEqual([], self.github.actions)
+
+    def test_gh_uses_argv_and_prohibits_data_clobber(self):
+        github = publisher.GitHub('owner/repo')
+        with patch.object(publisher.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = ''
+            github.upload('map-data-test', self.out / 'drivemate.pmtiles')
+            args, kwargs = run.call_args
+            self.assertIsInstance(args[0], list)
+            self.assertNotIn('shell', kwargs)
+            self.assertNotIn('--clobber', args[0])
+            with self.assertRaises(ValueError):
+                github.upload('map-data-test', self.out / 'drivemate.pmtiles', mutable=True)
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+class RateLimitResumeTest(unittest.TestCase):
+    def test_partly_uploaded_batch_resumes_after_allowance_resets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            files = {}
+            for i in range(5):
+                path = Path(tmp) / f'lanes-{i}_0.json'
+                path.write_text('{"ways": []}' + ' ' * i)
+                files[path.name] = path
+            gh = FakeGitHub()
+            gh.waits = 0
+            calls = []
+
+            def upload_many(tag, paths):
+                calls.append([Path(p).name for p in paths])
+                if len(calls) == 1:  # first batch: two land, then the allowance runs out
+                    for p in paths[:2]:
+                        gh.files[tag][Path(p).name] = Path(p).read_bytes()
+                    raise publisher.RateLimited('API rate limit exceeded')
+                for p in paths:
+                    name = Path(p).name
+                    assert name not in gh.files[tag], 'must not re-upload existing assets'
+                    gh.files[tag][name] = Path(p).read_bytes()
+
+            gh.upload_many = upload_many
+            gh.wait_for_rate_limit = lambda: setattr(gh, 'waits', gh.waits + 1)
+            wanted = publisher.upload_immutable(gh, 'map-data-test-1', files)
+            self.assertEqual(set(wanted), set(files))
+            self.assertEqual(1, gh.waits)
+            self.assertEqual(3, len(calls[1]))
+
+    def test_read_only_calls_wait_and_retry_but_writes_raise(self):
+        gh = publisher.GitHub('owner/repo')
+        waits = []
+        gh.wait_for_rate_limit = lambda: waits.append(1)
+        limited = unittest.mock.Mock(returncode=1, stdout='', stderr='HTTP 403: API rate limit exceeded')
+        ok = unittest.mock.Mock(returncode=0, stdout='{}', stderr='')
+        with patch.object(publisher.subprocess, 'run', side_effect=[limited, ok]):
+            self.assertEqual('{}', gh.run('api', 'repos/owner/repo/releases/tags/x'))
+        self.assertEqual(1, len(waits))
+        with patch.object(publisher.subprocess, 'run', return_value=limited):
+            with self.assertRaises(publisher.RateLimited):
+                gh.run('release', 'upload', 'map-data-x', 'f')
+
+
+class IncompleteUploadTest(unittest.TestCase):
+    def test_cut_off_upload_is_deleted_and_uploaded_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            files = {}
+            for i in range(3):
+                path = Path(tmp) / f'lanes-{i}_1.json'
+                path.write_text('{"ways": []}' + ' ' * i)
+                files[path.name] = path
+            gh = FakeGitHub()
+            tag = 'map-data-test-2'
+            gh.files[tag] = {'lanes-0_1.json': files['lanes-0_1.json'].read_bytes()[:3]}
+            real_inventory = gh.inventory
+
+            def inventory(t):
+                assets = real_inventory(t)
+                if t == tag and 'lanes-0_1.json' in assets and len(gh.files[tag]['lanes-0_1.json']) == 3:
+                    assets['lanes-0_1.json'].update(state='starter', digest=None)
+                return assets
+            gh.inventory = inventory
+            with patch.object(publisher.time, 'sleep'):
+                publisher.upload_immutable(gh, tag, files)
+            self.assertIn(('delete', tag, 'lanes-0_1.json'), gh.actions)
+            self.assertEqual(files['lanes-0_1.json'].read_bytes(), gh.files[tag]['lanes-0_1.json'])
+
+    def test_live_pointer_release_is_never_cleaned(self):
+        with self.assertRaises(ValueError):
+            publisher.settle_inventory(FakeGitHub(), publisher.LEGACY, {})

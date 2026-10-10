@@ -1,0 +1,157 @@
+{
+  "scope": "desktop native offline routing, not Android or legal correctness",
+  "python": "3.12.14",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "pyvalhalla": "3.6.3",
+  "graph_sha256": "4d88c7d2fca0b6dfc4f79cf09a128595d61f198da2b55942e123e5c7c9f729f3",
+  "cases": {
+    "manchester_to_stockport": {
+      "request": {
+        "locations": [
+          {
+            "lat": 53.4808,
+            "lon": -2.2426
+          },
+          {
+            "lat": 53.4106,
+            "lon": -2.1575
+          }
+        ],
+        "costing": "auto",
+        "units": "kilometers"
+      },
+      "first_ms": 323.2824469996558,
+      "warm_median_ms": 110.73792299976049,
+      "all_ms": [
+        323.2824469996558,
+        96.21682000033616,
+        79.2814839987841,
+        130.16251899898634,
+        104.44351400110463,
+        117.03233199841634,
+        252.27852300122322
+      ],
+      "length_km": 11.36,
+      "duration_seconds": 952.031
+    },
+    "stockport_to_manchester": {
+      "request": {
+        "locations": [
+          {
+            "lat": 53.4106,
+            "lon": -2.1575
+          },
+          {
+            "lat": 53.4808,
+            "lon": -2.2426
+          }
+        ],
+        "costing": "auto",
+        "units": "kilometers"
+      },
+      "first_ms": 107.35466799997084,
+      "warm_median_ms": 103.09033399880718,
+      "all_ms": [
+        107.35466799997084,
+        116.32952900072269,
+        90.80709099907835,
+        86.63259400054812,
+        107.50485399876197,
+        98.67581399885239,
+        204.16375000058906
+      ],
+      "length_km": 12.837,
+      "duration_seconds": 1047.803
+    },
+    "airport_to_manchester": {
+      "request": {
+        "locations": [
+          {
+            "lat": 53.365,
+            "lon": -2.272
+          },
+          {
+            "lat": 53.4808,
+            "lon": -2.2426
+          }
+        ],
+        "costing": "auto",
+        "units": "kilometers"
+      },
+      "first_ms": 212.2389590003877,
+      "warm_median_ms": 65.05597800060059,
+      "all_ms": [
+        212.2389590003877,
+        193.4639959999913,
+        70.58671400045569,
+        51.417166001556325,
+        44.53406900029222,
+        59.65975400067691,
+        70.45220200052427
+      ],
+      "length_km": 15.318,
+      "duration_seconds": 971.033
+    },
+    "bolton_to_stockport": {
+      "request": {
+        "locations": [
+          {
+            "lat": 53.578,
+            "lon": -2.429
+          },
+          {
+            "lat": 53.4106,
+            "lon": -2.1575
+          }
+        ],
+        "costing": "auto",
+        "units": "kilometers"
+      },
+      "first_ms": 130.0165749998996,
+      "warm_median_ms": 79.01432650032802,
+      "all_ms": [
+        130.0165749998996,
+        76.30407000033301,
+        77.17168599992874,
+        73.52452399936737,
+        80.85696700072731,
+        160.9907669990207,
+        174.40399000042817
+      ],
+      "length_km": 34.978,
+      "duration_seconds": 1362.738
+    }
+  },
+  "published_graph_manifest": {
+    "build_commit": "2eb066d54695d3dc575bd07c7b1eff8eac752f21",
+    "build_run": "37969596182",
+    "built": "2026-10-09T18:08:57.593514+00:00",
+    "bytes": 2800936960,
+    "coverage_validation": "Six route smoke checks; not proof of every road or legal restriction",
+    "download_bytes": 1016384059,
+    "engine": "valhalla-3.6.3",
+    "generation": "routing-uk-20261009-r37969596182-a1",
+    "part_metadata": {
+      "valhalla-uk-20261009-r37969596182-a1.tar.gz.part00": {
+        "bytes": 1016384059,
+        "sha256": "cec7a8309f83f62af8a3c479ed4ffebec9c5e2b556b22e13d468b1bfd24872c1",
+        "tag": "routing-uk-20261009-r37969596182-a1"
+      }
+    },
+    "parts": [
+      "valhalla-uk-20261009-r37969596182-a1.tar.gz.part00"
+    ],
+    "sha256": "4d88c7d2fca0b6dfc4f79cf09a128595d61f198da2b55942e123e5c7c9f729f3",
+    "source": {
+      "attribution": "\u00a9 OpenStreetMap contributors",
+      "licence": "ODbL-1.0",
+      "retrieved_at": "2026-10-09T17:58:01Z",
+      "sha256": "7857cd61315982a4561b5775222d824892c29625a93ff9b68fc1c0ac4f5f1424",
+      "url": "https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf"
+    }
+  },
+  "unpack_verify_ms": 22904.7897319997,
+  "graph_bytes": 2800936960,
+  "actor_init_ms": 165.2920529995754,
+  "process_peak_rss_kib": 149540
+}

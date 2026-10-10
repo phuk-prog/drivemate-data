@@ -1,0 +1,17 @@
+schema_name: DriveMate road-format benchmark
+attribution: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>'
+sources:
+  osm:
+    type: osm
+    url: 'https://download.geofabrik.de/europe/united-kingdom/england/isle-of-wight-latest.osm.pbf'
+layers:
+  - id: roads
+    features:
+      - source: osm
+        geometry: line
+        min_zoom: 6
+        include_when:
+          highway: [motorway, trunk, primary, secondary, tertiary, unclassified, residential]
+        attributes:
+          - key: class
+            tag_value: highway

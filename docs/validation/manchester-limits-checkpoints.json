@@ -1,0 +1,18 @@
+{
+  "description": "Greater Manchester speed-limit and speed-camera acceptance checkpoints. Every expectation is an explicit OpenStreetMap tag read from the OSM API (api.openstreetmap.org/api/0.6/map, 10 Oct 2026); nothing is a guess and no Mapillary data is involved. Points are mapped road vertices; headings follow the way direction. Expected mph is the tagged maxspeed (70 mph on a motorway mainline is also the UK national limit; none of these ways shows a lower or variable signed limit).",
+  "region": "greater-manchester",
+  "checkpoints": [
+    {"id": "menai-grove", "name": "Menai Grove (SK8 2EZ street)", "lat": 53.3956262, "lon": -2.194299, "heading": 297, "expect_mph": 20, "source": "OSM way 187541143 maxspeed=20 mph"},
+    {"id": "anglesey-grove", "name": "Anglesey Grove", "lat": 53.3958833, "lon": -2.1961527, "heading": 275, "expect_mph": 20, "source": "OSM way 4953961 maxspeed=20 mph"},
+    {"id": "emlyn-grove", "name": "Emlyn Grove", "lat": 53.3961874, "lon": -2.193868, "heading": 145, "expect_mph": 20, "source": "OSM way 187541130 maxspeed=20 mph"},
+    {"id": "aber-road", "name": "Aber Road", "lat": 53.3953169, "lon": -2.1920391, "heading": 107, "expect_mph": 20, "source": "OSM way 52985830 maxspeed=20 mph"},
+    {"id": "m60-westbound", "name": "M60 mainline, carriageway heading WSW", "lat": 53.4073187, "lon": -2.1867049, "heading": 250, "expect_mph": 70, "source": "OSM way 995640225 highway=motorway ref=M60 maxspeed=70 mph"},
+    {"id": "m60-eastbound", "name": "M60 mainline, carriageway heading ENE", "lat": 53.4071594, "lon": -2.1880002, "heading": 70, "expect_mph": 70, "source": "OSM way 994993960 highway=motorway ref=M60 maxspeed=70 mph"},
+    {"id": "m56-north-west", "name": "M56 mainline, carriageway heading NW", "lat": 53.3687939, "lon": -2.2779395, "heading": 308, "expect_mph": 70, "source": "OSM way 175451315 highway=motorway ref=M56 maxspeed=70 mph"},
+    {"id": "m56-south-east", "name": "M56 mainline, carriageway heading SE", "lat": 53.3684854, "lon": -2.2769852, "heading": 130, "expect_mph": 70, "source": "OSM way 80282046 highway=motorway ref=M56 maxspeed=70 mph"},
+    {"id": "m62-north-east", "name": "M62 mainline, carriageway heading NE", "lat": 53.6029959, "lon": -2.1079036, "heading": 58, "expect_mph": 70, "source": "OSM way 151511903 highway=motorway ref=M62 maxspeed=70 mph"},
+    {"id": "m62-south-west", "name": "M62 mainline, carriageway heading SW", "lat": 53.6024546, "lon": -2.1088875, "heading": 238, "expect_mph": 70, "source": "OSM way 151511907 highway=motorway ref=M62 maxspeed=70 mph"},
+    {"id": "camera-a", "name": "Speed camera (OSM node 307746618)", "lat": 53.410593, "lon": -2.2196277, "expect_camera_within_m": 30, "source": "OSM node 307746618 highway=speed_camera"},
+    {"id": "camera-b", "name": "Speed camera (OSM node 307748586)", "lat": 53.4294063, "lon": -2.2095148, "expect_camera_within_m": 30, "source": "OSM node 307748586 highway=speed_camera"}
+  ]
+}

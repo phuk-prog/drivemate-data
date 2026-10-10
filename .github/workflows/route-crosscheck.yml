@@ -1,0 +1,144 @@
+name: Greater Manchester route cross-check (Valhalla vs OSRM)
+
+# Runs the same seeded journeys through Valhalla 3.6.3 (the engine the app ships) and OSRM
+# (car profile), both built from the SAME Geofabrik Greater Manchester extract, and flags
+# disagreements for human review. Detection only: nothing is published, repaired or uploaded
+# except the report artifact. Fails only on restriction or one-way violations made by
+# Valhalla, plus restriction types Valhalla 3.6.3 does not enforce (as restriction acceptance).
+on:
+  schedule:
+    - cron: "7 20 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
+  workflow_dispatch:
+    inputs:
+      journeys:
+        description: Number of seeded random journeys (named journeys are always added)
+        required: false
+        default: '300'
+  push:
+    branches: [codex/architecture-foundation]
+    paths:
+      - scripts/route_crosscheck.py
+      - tests/test_route_crosscheck.py
+      - .github/workflows/route-crosscheck.yml
+      - docs/validation/route-crosscheck.md
+
+permissions:
+  contents: read
+
+# Shares the map-data group so it never overlaps the expensive map builds.
+concurrency:
+  group: map-data
+  cancel-in-progress: false
+
+env:
+  SOURCE_URL: https://download.geofabrik.de/europe/united-kingdom/england/greater-manchester-latest.osm.pbf
+  # Exact release tag plus index digest (verified with `docker buildx imagetools inspect`).
+  OSRM_IMAGE: ghcr.io/project-osrm/osrm-backend:v6.0.0@sha256:729461bcc9ae9e6aafa92c0f93db9b060a32e85d5e72092c01ae4a4a9f1eb564
+  JOURNEYS: ${{ github.event.inputs.journeys || '300' }}
+
+jobs:
+  crosscheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool jq > /dev/null
+          mkdir -p work/osrm
+          python3 -m venv work/vh
+          work/vh/bin/pip install -q pyvalhalla==3.6.3 osmium==4.3.1
+          curl -sSfL -o work/valhalla_build_extract https://raw.githubusercontent.com/valhalla/valhalla/3.6.3/scripts/valhalla_build_extract
+          echo '37daac2ff760552c79431b41653be6d457e7e30d051e400c29064208fce65ae4  work/valhalla_build_extract' | sha256sum --check --strict
+          docker pull -q "$OSRM_IMAGE"
+
+      - name: OpenStreetMap base (Geofabrik, Greater Manchester, downloaded once)
+        run: |
+          set -euo pipefail
+          case "$JOURNEYS" in ''|*[!0-9]*) echo "::error::journeys must be a whole number"; exit 1;; esac
+          curl -sSfL --retry 3 -o work/base.osm.pbf "$SOURCE_URL"
+          sha256sum work/base.osm.pbf | cut -d' ' -f1 > work/source.sha256
+          date -u +%FT%TZ > work/source-retrieved.txt
+          osmium fileinfo -e -j work/base.osm.pbf | jq '{timestamp: .header.option.osmosis_replication_timestamp, data: .data.count}' > work/source-info.json || true
+          cp work/base.osm.pbf work/osrm/gm.osm.pbf
+          {
+            echo "### Source"
+            echo "- URL: $SOURCE_URL"
+            echo "- SHA-256: \`$(cat work/source.sha256)\` (same file for both engines)"
+            echo "- Retrieved: $(cat work/source-retrieved.txt)"
+            echo "- OSRM image: \`$OSRM_IMAGE\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Rewrite only_u_turn restrictions Valhalla 3.6.3 ignores (equivalent no_* relations)
+        run: |
+          set -euo pipefail
+          work/vh/bin/python scripts/restriction_rewrite.py --input work/base.osm.pbf \
+            --output work/rewritten.osm.pbf --report work/restriction-rewrite.json
+          jq -c '{counts, skipped_by_reason}' work/restriction-rewrite.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build the Valhalla road graph (same commands as the map-data routing job)
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/work/vh/bin:$PATH"
+          mkdir -p work/tiles
+          python3 work/vh/lib/python3*/site-packages/valhalla/valhalla_build_config.py \
+            --mjolnir-tile-dir "$PWD/work/tiles" --mjolnir-tile-extract "$PWD/work/gm.tar" \
+            --mjolnir-admin "$PWD/work/admin.sqlite" --mjolnir-concurrency "$(nproc)" > work/valhalla.json
+          valhalla_build_admins -c work/valhalla.json work/rewritten.osm.pbf 2>&1 | tail -n 3
+          valhalla_build_tiles -c work/valhalla.json work/rewritten.osm.pbf 2>&1 | tail -n 5
+          python3 work/valhalla_build_extract -c work/valhalla.json -v 2>&1 | tail -n 2
+          rm -rf work/tiles
+          sha256sum work/gm.tar | cut -d' ' -f1 > work/graph.sha256
+
+      - name: Build the OSRM graph (car profile, MLD) and start osrm-routed
+        run: |
+          set -euo pipefail
+          echo "$(cat work/source.sha256)  work/osrm/gm.osm.pbf" | sha256sum --check --strict
+          docker run --rm -v "$PWD/work/osrm:/data" "$OSRM_IMAGE" osrm-extract -p /opt/car.lua /data/gm.osm.pbf 2>&1 | tail -n 3
+          docker run --rm -v "$PWD/work/osrm:/data" "$OSRM_IMAGE" osrm-partition /data/gm.osrm 2>&1 | tail -n 2
+          docker run --rm -v "$PWD/work/osrm:/data" "$OSRM_IMAGE" osrm-customize /data/gm.osrm 2>&1 | tail -n 2
+          docker run -d --name osrm -p 127.0.0.1:5000:5000 -v "$PWD/work/osrm:/data" "$OSRM_IMAGE" \
+            osrm-routed --algorithm mld --max-table-size 100 /data/gm.osrm
+          for i in $(seq 1 60); do
+            if curl -sf "http://127.0.0.1:5000/nearest/v1/driving/-2.2309,53.4774" > /dev/null; then
+              echo "osrm-routed ready"; exit 0
+            fi
+            sleep 2
+          done
+          docker logs osrm | tail -n 20
+          echo "::error::osrm-routed did not start"; exit 1
+
+      - name: Cross-check routes
+        run: |
+          set -euo pipefail
+          work/vh/bin/python scripts/route_crosscheck.py \
+            --pbf work/base.osm.pbf --graph work/gm.tar --osrm-url http://127.0.0.1:5000 \
+            --journeys "$JOURNEYS" --source-sha256 "$(cat work/source.sha256)" \
+            --rewrite-report work/restriction-rewrite.json \
+            --report work/route-crosscheck.json --markdown work/route-crosscheck.md \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop osrm-routed
+        if: always()
+        run: docker rm -f osrm > /dev/null 2>&1 || true
+
+      - name: Retain cross-check evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: route-crosscheck-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            work/route-crosscheck.json
+            work/route-crosscheck.md
+            work/restriction-rewrite.json
+            work/source.sha256
+            work/source-retrieved.txt
+            work/source-info.json
+            work/graph.sha256
