@@ -70,3 +70,17 @@ Current correction preflight target: 91 unit tests and five generator selftests.
 - Data commit `e0b8216131d1dedc793877be326eb752085f2c4f` passed exact-source CI https://github.com/phuk-prog/drivemate-data/actions/runs/38029092446: 98 unit tests and five generator selftests.
 - The complete PMTiles audit covers 252,138 directory entries and 221,293 physical contents, not unique byte hashes. Sixteen physical blocks have identical bytes; this is permitted deduplication behavior, not evidence of corruption.
 - Android commit `4c4f8b9c55be31973f78f32c8bd9f30106edfbb0`: canonical preflight passed (293 JVM tests, zero failures/errors/skips, tooling gates, lint and robot test APK assembly). Exact-source CI https://github.com/phuk-prog/DriveMate/actions/runs/38029477016 is queued; device/robot results remain pending. Private replay unavailable; release readiness remains false. These do not establish nationwide driving legality or physical-device performance.
+
+
+## Approved regional packaging architecture — 10 October 2026
+
+User approved choosing optimal section sizes and implementing. Decision:
+low-zoom (z0–8) nationwide base + Web Mercator z8-parent detail packages
+(z9–14) subdivided to z9/z10 in dense areas. Maximum detailed archive size
+200,000,000 bytes as a testable initial bound. Local Manchester z8/126/82
+pilot first; source/consumer compatibility preserved. **Stage 6 packaging
+foundation has been brought forward without claiming Stage 1 complete.**
+See `docs/regional-packaging.md` and `scripts/region_pmtiles.py`.
+Only synthetic source CI and unpublished prototype are authorised until
+full UK validation-only build resolves; no new GitHub large map build
+or production map release should be started by this change.
