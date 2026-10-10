@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import time
 
 LEGACY = 'map-data-uk'
 ASSET_LIMIT = 1000
@@ -76,6 +77,14 @@ class GitHubError(RuntimeError):
     pass
 
 
+class RateLimited(GitHubError):
+    """GitHub's hourly API allowance for this token is used up."""
+
+
+UPLOAD_BATCH = 40          # assets per `gh release upload`: one release lookup per batch
+MAX_RATE_LIMIT_WAITS = 3   # each wait lasts until the allowance resets (at most ~1 hour)
+
+
 class GitHub:
     def __init__(self, repo):
         if not REPO.fullmatch(repo):
@@ -83,10 +92,33 @@ class GitHub:
         self.repo = repo
 
     def run(self, *args):
-        result = subprocess.run(['gh', *map(str, args)], capture_output=True, text=True, check=False)
-        if result.returncode:
-            raise GitHubError(result.stderr.strip() or 'GitHub CLI failed')
-        return result.stdout
+        # Read-only API calls are simply repeated after the allowance resets. Anything that
+        # changes a release raises RateLimited so the caller can re-check what already exists.
+        read_only = args[:1] == ('api',) and '-X' not in args
+        for attempt in range(MAX_RATE_LIMIT_WAITS + 1):
+            result = subprocess.run(['gh', *map(str, args)], capture_output=True, text=True, check=False)
+            if not result.returncode:
+                return result.stdout
+            message = result.stderr.strip() or 'GitHub CLI failed'
+            if 'rate limit' not in message.lower():
+                raise GitHubError(message)
+            if not read_only or attempt == MAX_RATE_LIMIT_WAITS:
+                raise RateLimited(message)
+            self.wait_for_rate_limit()
+        raise RateLimited('GitHub API allowance exhausted')
+
+    def wait_for_rate_limit(self):
+        """Sleep until the core API allowance resets (the rate_limit endpoint itself is free)."""
+        reset = None
+        probe = subprocess.run(['gh', 'api', 'rate_limit'], capture_output=True, text=True, check=False)
+        if not probe.returncode:
+            try:
+                reset = int(json.loads(probe.stdout)['resources']['core']['reset'])
+            except (ValueError, KeyError, TypeError):
+                reset = None
+        delay = 3700 if reset is None else min(max(reset - time.time(), 0) + 15, 3700)
+        print(f'GitHub API allowance used up; waiting {int(delay)} s for it to reset', flush=True)
+        time.sleep(delay)
 
     def release(self, tag):
         checked_tag(tag)
@@ -127,6 +159,12 @@ class GitHub:
                 raise ValueError('Only the legacy pointer may be replaced')
             args.append('--clobber')
         self.run(*args)
+
+    def upload_many(self, tag, paths):
+        """Upload several new immutable assets with one command (never clobbers)."""
+        if tag == LEGACY:
+            raise ValueError('Legacy release takes only the pointer')
+        self.run('release', 'upload', tag, *[str(Path(p).resolve()) for p in paths], '--repo', self.repo)
 
     def download(self, tag, name, directory):
         checked_name(name)
@@ -273,9 +311,28 @@ def upload_immutable(github, tag, files):
         raise ValueError('Immutable release contains unexpected assets')
     for name in existing:
         verify_inventory(existing, {name: wanted[name]}, tag)
-    for name, path in files.items():
-        if name not in existing:
-            github.upload(tag, path)
+    waits = 0
+    while True:
+        missing = [path for name, path in files.items() if name not in existing]
+        try:
+            if hasattr(github, 'upload_many'):
+                for start in range(0, len(missing), UPLOAD_BATCH):
+                    github.upload_many(tag, missing[start:start + UPLOAD_BATCH])
+            else:
+                for path in missing:
+                    github.upload(tag, path)
+            break
+        except RateLimited:
+            if waits >= MAX_RATE_LIMIT_WAITS:
+                raise
+            waits += 1
+            github.wait_for_rate_limit()
+            # A batch may have partly uploaded: re-check before resuming, and verify what is there.
+            existing = github.inventory(tag)
+            if not set(existing) <= set(wanted):
+                raise ValueError('Immutable release contains unexpected assets')
+            for name in existing:
+                verify_inventory(existing, {name: wanted[name]}, tag)
     verify_inventory(github.inventory(tag), wanted, tag, exact=True)
     return wanted
 

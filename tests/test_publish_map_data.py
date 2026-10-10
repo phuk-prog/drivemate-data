@@ -7,6 +7,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+import unittest.mock
 
 spec = importlib.util.spec_from_file_location('publisher', Path(__file__).resolve().parents[1] / 'scripts/publish_map_data.py')
 publisher = importlib.util.module_from_spec(spec)
@@ -453,3 +454,47 @@ class PublisherTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class RateLimitResumeTest(unittest.TestCase):
+    def test_partly_uploaded_batch_resumes_after_allowance_resets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            files = {}
+            for i in range(5):
+                path = Path(tmp) / f'lanes-{i}_0.json'
+                path.write_text('{"ways": []}' + ' ' * i)
+                files[path.name] = path
+            gh = FakeGitHub()
+            gh.waits = 0
+            calls = []
+
+            def upload_many(tag, paths):
+                calls.append([Path(p).name for p in paths])
+                if len(calls) == 1:  # first batch: two land, then the allowance runs out
+                    for p in paths[:2]:
+                        gh.files[tag][Path(p).name] = Path(p).read_bytes()
+                    raise publisher.RateLimited('API rate limit exceeded')
+                for p in paths:
+                    name = Path(p).name
+                    assert name not in gh.files[tag], 'must not re-upload existing assets'
+                    gh.files[tag][name] = Path(p).read_bytes()
+
+            gh.upload_many = upload_many
+            gh.wait_for_rate_limit = lambda: setattr(gh, 'waits', gh.waits + 1)
+            wanted = publisher.upload_immutable(gh, 'map-data-test-1', files)
+            self.assertEqual(set(wanted), set(files))
+            self.assertEqual(1, gh.waits)
+            self.assertEqual(3, len(calls[1]))
+
+    def test_read_only_calls_wait_and_retry_but_writes_raise(self):
+        gh = publisher.GitHub('owner/repo')
+        waits = []
+        gh.wait_for_rate_limit = lambda: waits.append(1)
+        limited = unittest.mock.Mock(returncode=1, stdout='', stderr='HTTP 403: API rate limit exceeded')
+        ok = unittest.mock.Mock(returncode=0, stdout='{}', stderr='')
+        with patch.object(publisher.subprocess, 'run', side_effect=[limited, ok]):
+            self.assertEqual('{}', gh.run('api', 'repos/owner/repo/releases/tags/x'))
+        self.assertEqual(1, len(waits))
+        with patch.object(publisher.subprocess, 'run', return_value=limited):
+            with self.assertRaises(publisher.RateLimited):
+                gh.run('release', 'upload', 'map-data-x', 'f')
