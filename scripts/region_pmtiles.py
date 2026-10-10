@@ -106,6 +106,14 @@ def plan_tile_sets(index, max_bytes=DEFAULT_MAX_BYTES):
         add_region(key, rows)
     if sum(len(v) for v in groups.values()) != len(base) + sum(map(len, roots.values())):
         raise ValueError("Tiles were lost or duplicated during region partition")
+    # Region sections may never contain a low zoom tile, and base may never
+    # contain a high zoom tile. This is what permits a single-source renderer.
+    for name, items in groups.items():
+        if name == "base":
+            if any(row[1] > BASE_MAX_ZOOM for row in items):
+                raise ValueError("Detailed tile leaked into the nationwide base")
+        elif any(row[1] < DETAIL_MIN_ZOOM for row in items):
+            raise ValueError("Low zoom tile leaked into a detail region")
     return groups
 
 
@@ -157,6 +165,7 @@ def build(source, destination, max_bytes=DEFAULT_MAX_BYTES, pilot=None, dry_run=
         meta = reader.metadata()
         groups = plan_tile_sets(walk_index(fetch, header), max_bytes)
         region_names = list(groups)
+        total_addressed_tiles = sum(map(len, groups.values()))
         if pilot is not None:
             def matches(name):
                 if name == "base":
@@ -169,6 +178,17 @@ def build(source, destination, max_bytes=DEFAULT_MAX_BYTES, pilot=None, dry_run=
                 raise ValueError("Selected pilot has no detailed map data")
         if not groups:
             raise ValueError("No map regions selected")
+        # Validate input tile ownership before packaging. The source archive's
+        # expanded run lengths are already checked by walk_index().
+        all_rows = list(groups.values())
+        seen_tiles = set()
+        for rows in all_rows:
+            for row in rows:
+                if row[0] in seen_tiles:
+                    raise ValueError("Overlapping tile assignments")
+                seen_tiles.add(row[0])
+        if not seen_tiles:
+            raise ValueError("Selected regions have no tiles")
         inventory = {
             "schema": 1, "status": "pilot_unpublished" if pilot else "unpublished",
             "source_sha256": sha256(source), "source_bytes": source.stat().st_size,
@@ -176,7 +196,10 @@ def build(source, destination, max_bytes=DEFAULT_MAX_BYTES, pilot=None, dry_run=
             "max_package_bytes": max_bytes, "pilot_root": pilot,
             "tile_partition": "Each z10+ tile belongs to exactly one z8 parent or subdivided descendant.",
             "licensing": "Unreviewed sources must not be publicly redistributed from this pilot.",
-            "candidate_regions": len(region_names) - 1, "packages": {},
+            "candidate_regions": len(region_names) - 1,
+            "source_addressed_tiles": total_addressed_tiles,
+            "selected_addressed_tiles": sum(map(len, groups.values())),
+            "packages": {},
         }
         destination.mkdir(parents=True, exist_ok=True)
         if any(destination.iterdir()):
@@ -210,16 +233,34 @@ def build(source, destination, max_bytes=DEFAULT_MAX_BYTES, pilot=None, dry_run=
                 if path.stat().st_size > max_bytes and name != "base":
                     path.unlink()
                     raise ValueError(f"Region {name} exceeds {max_bytes} byte cap after writing")
-                # Verify archive identity independently by streaming from disk.
+                # Compare EVERY expanded source tile ID and compressed payload
+                # with the output. This also catches invalid writer deduplication,
+                # missing intermediate tiles, or cross-package geometry drift.
+                # Source tile bytes are unchanged: no geometry or metadata edits.
                 with path.open("rb") as verify_file, mmap.mmap(verify_file.fileno(),0,access=mmap.ACCESS_READ) as result_map:
-                    readback = Reader(lambda off, count: result_map[off:off+count])
-                    if readback.header()["addressed_tiles_count"] != len(rows):
+                    def read_region(off, count):
+                        if off < 0 or count < 0 or off + count > len(result_map):
+                            raise ValueError("Regional PMTiles points outside output")
+                        return result_map[off:off+count]
+                    readback = Reader(read_region)
+                    region_header = readback.header()
+                    if region_header["addressed_tiles_count"] != len(rows):
                         raise ValueError(f"Tile count mismatch in {name}")
-                    first = rows[0]
-                    last = rows[-1]
-                    for row in (first,last):
-                        if readback.get(row[1],row[2],row[3]) != fetch(header["tile_data_offset"]+row[4],row[5]):
-                            raise ValueError(f"Region archive mismatch in {name}")
+                    emitted = walk_index(read_region, region_header)
+                    verified = 0
+                    for source_row in rows:
+                        output_row = next(emitted, None)
+                        if output_row is None or output_row[0] != source_row[0]:
+                            raise ValueError(f"Missing/changed tile IDs in {name}")
+                        origin_bytes = fetch(header["tile_data_offset"]+source_row[4],source_row[5])
+                        emitted_bytes = read_region(
+                            region_header["tile_data_offset"]+output_row[4], output_row[5])
+                        if origin_bytes != emitted_bytes:
+                            raise ValueError(f"Tile payload mismatch in {name}: {source_row[0]}")
+                        verified += 1
+                    if next(emitted, None) is not None:
+                        raise ValueError(f"Unexpected additional tiles in {name}")
+                info["verified_tile_payloads"] = verified
                 info.update({"filename":path.name,"bytes":path.stat().st_size,"sha256":sha256(path)})
             inventory["packages"][name] = info
         (destination / ("regional-plan.json" if dry_run else "regional-manifest.json")).write_text(

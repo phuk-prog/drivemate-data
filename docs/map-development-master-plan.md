@@ -84,3 +84,17 @@ See `docs/regional-packaging.md` and `scripts/region_pmtiles.py`.
 Only synthetic source CI and unpublished prototype are authorised until
 full UK validation-only build resolves; no new GitHub large map build
 or production map release should be started by this change.
+
+
+## Manchester real regional pilot — 10 October 2026
+
+The user approved the base-z0–9 plus adaptive detailed-z10–14 approach.
+Extended exporter now checks all tile identities/payloads, not a first/last
+sample. Regression tests include a middle tile and retained nationwide z9
+tiles when child regions split. A separate nonpublishing UK pilot workflow
+(`.github/workflows/regional-pilot.yml`) shares the `map-data` concurrency
+group with the active full UK generation, verifies the historical PMTiles
+SHA-256 and writes audit artifacts only (no raw map files, new release,
+download pointer or Android activation). The real pilot remains *testing*
+until that workflow has completed successfully and user-visible renderer
+compatibility has also been validated. See `docs/regional-packaging.md`.

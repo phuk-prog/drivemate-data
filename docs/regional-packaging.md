@@ -37,8 +37,9 @@ without editing roads, house numbers or polygons.
 
 ### Critical remaining gates
 
-- Verify every tile ID in the output against source, not only the first and
-  last samples (the prototype currently samples first/last plus counts).
+- **Implemented:** compare every expanded tile ID and raw gzip MVT payload
+  byte-for-byte with the source during each region export. Verify real UK
+  geometry and renderer behaviour separately.
 - Check real Manchester artifact size, rendering and downloaded data consumption.
 - Implement region selection in Android without affecting existing installed
   complete-UK source; test missing region, zoom crossing, download resume,
@@ -70,3 +71,22 @@ region subdivided below z9. Keeping every z0–9 tile in the nationwide
 base ensures that each tile has exactly one owner. Regional overlays
 then exclusively contain z10–14 tiles. This design refinement does not
 alter the currently installed Android map.
+
+### Automated nonpublishing real UK pilot
+
+The `.github/workflows/regional-pilot.yml` workflow is a read-only pilot
+on the development branch. It is triggered only by relevant changes to the
+regional packaging source/workflow or explicit manual dispatch. Its GitHub
+Actions concurrency group is exactly `map-data` so it cannot compete with
+the currently running full UK map build using that group. It downloads the
+unchanged, already audited legacy release archive and requires exact SHA-256
+`8ec2a5cd5e4373a5d75243c1aa46ccb40adb3a8dd9b821f06a3b2c765f9cf069`
+and byte length `1638441575` before any processing.
+
+The workflow makes an unpublished Manchester pilot and checks the
+resulting archives' PMTiles/MVT format. It uploads **only the compact
+manifest and validation reports**, not the map payloads (licence review
+outstanding). The source release and Android app remain unchanged. A real
+pilot run's successful results must be observed before its data pipeline
+is considered tested. The experiment remains constrained by the verified
+historical archive, not the newest in-progress UK map build.

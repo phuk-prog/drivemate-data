@@ -1,0 +1,100 @@
+name: DriveMate regional UK map packaging pilot
+
+# Narrow, nonpublishing experiment. Never merge this with a live pointer update.
+on:
+  push:
+    branches: [codex/architecture-foundation]
+    paths:
+      - scripts/region_pmtiles.py
+      - tests/test_region_pmtiles.py
+      - .github/workflows/regional-pilot.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Respect the active UK validation-only build. Exactly one large map job.
+concurrency:
+  group: map-data
+  cancel-in-progress: false
+
+jobs:
+  manchester:
+    name: Verify real Manchester regional PMTiles (unpublished)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_SHA256: 8ec2a5cd5e4373a5d75243c1aa46ccb40adb3a8dd9b821f06a3b2c765f9cf069
+      EXPECTED_BYTES: '1638441575'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Check source code before expensive downloads
+        run: |
+          python3 -m pip install -q pmtiles==3.4.1 mapbox-vector-tile==2.2.0
+          python3 -m unittest discover -s tests -p test_region_pmtiles.py -v
+          mkdir -p work/source
+          df -h /
+      - name: Download verified historical UK map (read-only)
+        run: |
+          set -euo pipefail
+          gh release download map-data-uk \
+            --repo "${{ github.repository }}" --pattern drivemate.pmtiles \
+            --dir work/source
+          test "$(stat -c %s work/source/drivemate.pmtiles)" = "$EXPECTED_BYTES"
+          echo "$EXPECTED_SHA256  work/source/drivemate.pmtiles" | sha256sum --check --strict
+      - name: Partition Manchester from actual UK vector archive
+        run: |
+          set -euo pipefail
+          python3 scripts/region_pmtiles.py \
+            --source work/source/drivemate.pmtiles \
+            --output work/region-plan --plan-only --pilot 8/126/82
+          python3 scripts/region_pmtiles.py \
+            --source work/source/drivemate.pmtiles \
+            --output work/manchester-pilot --pilot 8/126/82
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('work/manchester-pilot/regional-manifest.json').read_text())
+          assert report['source_sha256']==__import__('os').environ['EXPECTED_SHA256']
+          assert report['base_zoom_max']==9 and report['detail_zoom_min']==10
+          assert report['pilot_root']=='8/126/82'
+          assert len(report['packages'])>=2
+          for name,info in report['packages'].items():
+              assert info['verified_tile_payloads']==info['tiles'], name
+          print('Verified real UK pilot packages:', ', '.join(report['packages']))
+          PY
+      - name: Validate every generated Manchester and UK-base PMTiles payload
+        run: |
+          set -euo pipefail
+          mkdir -p work/region-evidence
+          for archive in work/manchester-pilot/*.pmtiles; do
+            file="$(basename "$archive" .pmtiles)"
+            python3 scripts/verify_pmtiles.py "$archive" "work/region-evidence/${file}-validation.json"
+          done
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          m=json.loads(Path('work/manchester-pilot/regional-manifest.json').read_text())
+          print('## Manchester unpublished regional pilot')
+          print(f"Source SHA-256: `{m['source_sha256']}`")
+          print(f"Source tiles: {m['source_addressed_tiles']:,}")
+          print(f"Selected pilot tiles: {m['selected_addressed_tiles']:,}")
+          for name,info in m['packages'].items():
+              print(f"- {name}: {info['tiles']:,} tiles; {info['bytes']:,} bytes; all raw payloads match source")
+          print('No map publication or Android installation was performed.')
+          PY
+      - name: Retain diagnostic reports only (never map archive)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: regional-pilot-evidence-${{ github.run_id }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: |
+            work/region-plan/regional-plan.json
+            work/manchester-pilot/regional-manifest.json
+            work/region-evidence/*.json

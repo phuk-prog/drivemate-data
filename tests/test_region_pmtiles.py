@@ -63,6 +63,7 @@ class RegionPartitionTests(unittest.TestCase):
                 (8,126,82,b"boundary"),
                 (10,504,328,b"manchester-west"),
                 (10,505,328,b"manchester-east"),
+                (11,1009,656,b"manchester-detail-mid"),
                 (10,508,340,b"london"),
             ]
             cells.sort(key=lambda v:zxy_to_tileid(*v[:3]))
@@ -85,7 +86,25 @@ class RegionPartitionTests(unittest.TestCase):
             self.assertEqual(gzip.compress(b"manchester-west",mtime=0),
                              reader.get(10,504,328))
             self.assertIsNone(reader.get(10,508,340))
-            self.assertEqual(2,reader.header()["addressed_tiles_count"])
+            self.assertEqual(3,reader.header()["addressed_tiles_count"])
+            self.assertEqual(3,manifest["packages"]["region-z8-x126-y82"]["verified_tile_payloads"])
+            self.assertEqual(2,manifest["packages"]["base"]["verified_tile_payloads"])
+            self.assertEqual(6,manifest["source_addressed_tiles"])
+            self.assertEqual(5,manifest["selected_addressed_tiles"])
+
+    def test_zoom9_is_base_only_when_region_subdivides(self):
+        from pmtiles.tile import zxy_to_tileid
+        rows = [
+            (zxy_to_tileid(8,126,82),8,126,82,0,15),
+            (zxy_to_tileid(9,252,164),9,252,164,15,15),
+            (zxy_to_tileid(10,504,328),10,504,328,30,120),
+            (zxy_to_tileid(10,505,328),10,505,328,150,120),
+            (zxy_to_tileid(10,506,328),10,506,328,270,120),
+        ]
+        groups = plan_tile_sets(rows,130)
+        self.assertEqual(2,len(groups["base"]))
+        self.assertTrue(all(n.startswith("region-z10") for n in groups if n!="base"))
+        self.assertEqual(len(rows), sum(len(v) for v in groups.values()))
 
 
 if __name__ == "__main__":
