@@ -290,12 +290,16 @@ jobs:
             -o work/pois.osm.pbf --overwrite
           osmium tags-filter work/pois.osm.pbf nwr/name nwr/brand -o work/pois-named.osm.pbf --overwrite
           osmium export work/pois-named.osm.pbf -f geojsonseq -o work/pois.geojsonseq --overwrite --geometry-types=point,polygon
+          # OpenStreetMap house numbers (approved 10 Oct 2026): "12 Menai Grove" style search where OSM has them.
+          osmium tags-filter work/base.osm.pbf nwr/addr:housenumber -o work/addr.osm.pbf --overwrite
+          osmium tags-filter work/addr.osm.pbf nwr/addr:street -o work/addr-street.osm.pbf --overwrite
+          osmium export work/addr-street.osm.pbf -f geojsonseq -o work/addresses.geojsonseq --overwrite --geometry-types=point,polygon
           # Ordnance Survey Open Names (official streets and places; free download)
           url=$(curl -sSf "https://api.os.uk/downloads/v1/products/OpenNames/downloads?area=GB&format=CSV" | jq -r '.[0].url') && \
             curl -sSfL -o work/opennames.zip "$url" && unzip -q -o work/opennames.zip -d work/osnames || echo "::warning::OS Open Names download failed"
           # Also writes out/places/places-provenance.json (per-source counts and notices; not legal clearance).
           python3 scripts/places.py out/places --overture work/places.parquet --overture-release "$overture_release" \
-            --osm work/pois.geojsonseq --osnames work/osnames
+            --osm work/pois.geojsonseq --osm-addresses work/addresses.geojsonseq --osnames work/osnames
           test -s out/places/places-provenance.json
           ls out/places | wc -l; du -sh out/places
 
@@ -358,8 +362,8 @@ jobs:
 
       - name: Regional map packages (nationwide z0-9 base + z10-14 regions), verified
         env:
-          # Opt-in only after licensing and Manchester acceptance approval.
-          PUBLISH_REGIONAL_MAPS: ${{ vars.PUBLISH_REGIONAL_MAPS }}
+          # Approved by the owner 10 Oct 2026; set repo variable PUBLISH_REGIONAL_MAPS=false to stop.
+          PUBLISH_REGIONAL_MAPS: ${{ vars.PUBLISH_REGIONAL_MAPS || 'true' }}
         run: |
           set -euo pipefail
           python3 scripts/region_pmtiles.py --source out/drivemate.pmtiles --output work/regions \
