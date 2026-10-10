@@ -122,6 +122,80 @@ class EngineLimitationTests(unittest.TestCase):
         self.assertEqual(1, report["counts"]["engine_unsupported"])
         self.assertFalse(report["accepted"])
 
+    def test_split_way_parts_are_translated_back_to_the_osm_way(self):
+        # OSM: w40 runs west-east straight through the via node (5 - 2 - 3). The rewrite split it
+        # at node 2 in the routing copy; Valhalla reports the east part as PART.
+        part = 9_000_000_000_000
+        road = ra.load_ways([way(SOUTH, [1, 2]), way(40, [5, 2, 3])])
+        parsed = [ra.parse_relation(rel(30, members(SOUTH, SOUTH), restriction="only_u_turn"))]
+        coords = lambda wanted: {n: COORDS[n] for n in wanted if n in COORDS}  # noqa: E731
+        uturn = [edge(SOUTH, 2), edge(SOUTH, 1)]
+        ignoring = FakeRouter({SOUTH: uturn, EAST: [edge(SOUTH, 2), edge(part, 3)],
+                               WEST: [edge(SOUTH, 2), edge(40, 5)]})
+        untranslated = ra.run(road, parsed, coords, ignoring, "synthetic", {("only_u_turn", 30)})
+        caught = ra.run(road, parsed, coords, ignoring, "synthetic", {("only_u_turn", 30)}, {part: 40})
+        self.assertEqual(["pass", "inconclusive", "fail"],
+                         [p["status"] for p in untranslated["failures"][0]["probes"]])
+        self.assertEqual(["pass", "fail", "fail"], [p["status"] for p in caught["failures"][0]["probes"]])
+        self.assertEqual(1, caught["split_ways_translated"])
+        # Legal detours ending on either part pass once translated.
+        detour = FakeRouter({SOUTH: uturn, EAST: uturn + [edge(20, 6), edge(part, 3)],
+                             WEST: uturn + [edge(20, 4), edge(40, 5)]})
+        ok = ra.run(road, parsed, coords, detour, "synthetic", {("only_u_turn", 30)}, {part: 40})
+        self.assertEqual({"pass": 1}, {k: v for k, v in ok["counts"].items() if v})
+        self.assertEqual(0, ok["known_routing_safety_blockers"])
+
+    def test_split_way_mapping_must_be_in_reserved_range(self):
+        import json
+        import tempfile
+        body = {"schema": 2, "restriction": "only_u_turn", "input": {"sha256": "a" * 64},
+                "way_id_base": 9_000_000_000_000, "rewritten": [],
+                "split_ways": {"9000000000000": 40}}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "rewrite.json"
+            path.write_text(json.dumps(body))
+            self.assertEqual({9_000_000_000_000: 40}, ra.load_split_ways(path, "a" * 64))
+            with self.assertRaises(ValueError):
+                ra.load_split_ways(path, "b" * 64)
+            body["split_ways"] = {"41": 40}
+            path.write_text(json.dumps(body))
+            with self.assertRaises(ValueError):
+                ra.load_split_ways(path, "a" * 64)
+
+    def test_decoded_turn_must_match_the_routes_own_shape(self):
+        # Real case r14551046 (George Street): the route went legally round a 5-7 m triangle, but
+        # the shape decoder assigned it to the forbidden driveway. A verdict at the via node needs
+        # the route's own shape to lie on the decoded ways.
+        decoded = [edge(SOUTH, 2), edge(EAST, 3)]
+        on_east = ra.RouteEdges(decoded, [COORDS[1], COORDS[2], COORDS[3]])
+        went_north = ra.RouteEdges(decoded, [COORDS[1], COORDS[2], COORDS[4]])
+        confirmed = run([rel(31, members())], FakeRouter({EAST: on_east}))
+        self.assertEqual(1, confirmed["counts"]["fail"])  # shape agrees: a real violation still fails
+        mismatch = run([rel(31, members())], FakeRouter({EAST: went_north}))
+        self.assertEqual(0, mismatch["counts"]["fail"])
+        self.assertEqual(0, mismatch["counts"]["pass"])  # never a pass either
+        self.assertEqual(1, mismatch["counts"]["decode_mismatch"])
+        self.assertEqual(31, mismatch["decode_mismatch"][0]["relation"])
+        self.assertIn("decode_mismatch", mismatch["decode_mismatch"][0]["probes"][0]["status"])
+        self.assertIn("relation/31", ra.summary_markdown(mismatch))
+        # A decoded *legal* exit contradicted by the shape is not a pass.
+        only = run([rel(32, members(SOUTH, NORTH), restriction="only_straight_on")],
+                   FakeRouter({NORTH: ra.RouteEdges([edge(SOUTH, 2), edge(NORTH, 4)],
+                                                    [COORDS[1], COORDS[2], COORDS[3]]),
+                               EAST: None, WEST: None}))
+        self.assertEqual(0, only["counts"]["pass"])
+        self.assertEqual(1, only["counts"]["decode_mismatch"])
+
+    def test_shape_check_ignores_stretches_decoded_to_other_ways(self):
+        # Out-and-back on the exit (a U-turn 1 m along it) then away on another way: only the
+        # stretch decoded to each way is compared with that way.
+        via, east, north = COORDS[2], COORDS[3], COORDS[4]
+        one_metre_east = (via[0], via[1] + (east[1] - via[1]) * 1.0 / ra.haversine(via, east))
+        shape = [COORDS[1], via, one_metre_east, via, north]
+        geometry = {SOUTH: [COORDS[1], via], EAST: [via, east], NORTH: [via, north]}
+        self.assertLess(ra.shape_supports(shape, via, geometry[SOUTH], geometry[EAST], None, via), 0.1)
+        self.assertGreater(ra.shape_supports(shape, via, geometry[SOUTH], geometry[EAST]), 1.5)
+
     def test_rewrite_report_must_match_source(self):
         import json
         import tempfile

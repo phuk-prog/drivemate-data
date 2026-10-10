@@ -15,7 +15,7 @@ matches signage on the ground.
 """
 import argparse
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 import math
 from pathlib import Path
@@ -38,6 +38,11 @@ ONEWAY_FLAGS = {"from_possible_oneway_orientation_conflict", "to_possible_oneway
 VIA_MATCH_METRES = 3.0
 MIN_LEG_METRES = 4.0  # shorter from/to stretches cannot hold a probe point clear of both nodes
 UTURN_DEGREES = 135.0
+# Decoded-way cross-check: around a via-node decision the route's own shape must lie on the
+# decoded ways' OSM geometry. Valhalla shapes are the OSM node positions (1e-6 deg), so a
+# correct decode deviates by centimetres; 1.5 m leaves room for rounding only.
+SHAPE_WINDOW_METRES = 10.0
+SHAPE_TOLERANCE_METRES = 1.5
 MAX_FAILURE_DETAIL = 10000
 # Restriction types Valhalla 3.6.3 does not build into its graph (checked in its tile builder).
 ENGINE_UNSUPPORTED = {"only_u_turn"}
@@ -83,6 +88,96 @@ def walk(points, distance):
 
 def length(points):
     return sum(haversine(a, b) for a, b in zip(points, points[1:]))
+
+
+def distance_to_polyline(p, line):
+    """Metres from point ``p`` to polyline ``line`` (local flat projection; fine at junction scale)."""
+    k = math.cos(math.radians(p[0]))
+    to_xy = lambda q: ((q[1] - p[1]) * k * 111320.0, (q[0] - p[0]) * 110540.0)  # noqa: E731
+    best = float("inf")
+    pts = [to_xy(q) for q in line]
+    if len(pts) == 1:
+        return math.hypot(*pts[0])
+    for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+        dx, dy = bx - ax, by - ay
+        seg = dx * dx + dy * dy
+        t = 0.0 if seg == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / seg))
+        best = min(best, math.hypot(ax + t * dx, ay + t * dy))
+    return best
+
+
+def _window(shape, index, forward, metres, step=0.5):
+    """Points sampled every ``step`` m along ``shape`` from vertex ``index`` for ``metres``."""
+    pts = shape[index:] if forward else shape[:index + 1][::-1]
+    out, travelled, at = [], 0.0, step
+    for a, b in zip(pts, pts[1:]):
+        seg = haversine(a, b)
+        while at <= travelled + seg and at <= metres:
+            t = (at - travelled) / seg
+            out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+            at += step
+        travelled += seg
+        if travelled >= metres:
+            break
+    return out
+
+
+def _legs_from(line, via):
+    """Parts of an OSM polyline leaving the via point (nearest vertex), each starting at the via."""
+    k = min(range(len(line)), key=lambda i: haversine(line[i], via))
+    if haversine(line[k], via) > VIA_MATCH_METRES:
+        return []
+    return [leg for leg in (line[k:], line[:k + 1][::-1]) if len(leg) > 1]
+
+
+def _deviation(samples, legs):
+    """Worst distance of ``samples`` (sampled every 0.5 m from the via) from the best-fitting leg,
+    checking only samples within that leg's length (beyond it the route is on another way)."""
+    best = None
+    for leg in legs:
+        usable = samples[:int(length(leg) / 0.5)]
+        worst = max((distance_to_polyline(p, leg) for p in usable), default=0.0)
+        best = worst if best is None else min(best, worst)
+    return best
+
+
+def _arc_to(shape, index, forward, target):
+    """Metres along ``shape`` from vertex ``index`` to the first later (or earlier) vertex
+    within 1 m of ``target``; None when the shape never reaches it."""
+    if target is None:
+        return None
+    order = range(index + 1, len(shape)) if forward else range(index - 1, -1, -1)
+    travelled, prev = 0.0, shape[index]
+    for k in order:
+        travelled += haversine(prev, shape[k])
+        prev = shape[k]
+        if haversine(shape[k], target) <= 1.0:
+            return travelled
+    return None
+
+
+def shape_supports(shape, via, incoming, outgoing, in_start=None, out_end=None,
+                   window=SHAPE_WINDOW_METRES):
+    """Smallest worst-case deviation (m) of the route shape from ``incoming`` before and
+    ``outgoing`` after any pass through the via node, or None if it cannot be assessed.
+
+    ``incoming``/``outgoing`` are OSM polylines (lists of (lat, lon)) through or ending at the via.
+    ``in_start``/``out_end``: where the decoded runs on those ways begin and end, so the check
+    covers only the stretch the decoder assigned to them (at most ``window`` metres each side).
+    """
+    in_legs, out_legs = _legs_from(incoming, via), _legs_from(outgoing, via)
+    if not in_legs or not out_legs:
+        return None
+    best = None
+    for i, q in enumerate(shape):
+        if haversine(q, via) > VIA_MATCH_METRES:
+            continue
+        before = _arc_to(shape, i, False, in_start)
+        after = _arc_to(shape, i, True, out_end)
+        worst = max(_deviation(_window(shape, i, False, min(window, before if before is not None else window)), in_legs),
+                    _deviation(_window(shape, i, True, min(window, after if after is not None else window)), out_legs))
+        best = worst if best is None else min(best, worst)
+    return best
 
 
 # --------------------------------------------------------------------------- OSM semantics
@@ -188,6 +283,15 @@ class Case:
     to_way: int
     via: tuple
     probes: list = field(default_factory=list)
+    geometry: dict = field(default_factory=dict)  # way id -> OSM polyline, for ways at the via node
+
+
+class RouteEdges(list):
+    """Decoded edges plus the route's own shape (independent of the decoder), for cross-checks."""
+
+    def __init__(self, edges, shape=None):
+        super().__init__(edges)
+        self.shape = shape
 
 
 class ProbeInconclusive(Exception):
@@ -244,7 +348,7 @@ class ValhallaRouter(Router):
         graph = Path(graph)
         self._tmp = tempfile.TemporaryDirectory(prefix="drivemate-acceptance-")
         if graph.is_dir():
-            config = get_config(tile_dir=str(graph), verbose=False)
+            config = get_config(tile_extract="", tile_dir=str(graph), verbose=False)
         else:
             config = get_config(tile_extract=str(graph), tile_dir=self._tmp.name, verbose=False)
         self.actor = Actor(config)
@@ -272,6 +376,7 @@ class ValhallaRouter(Router):
                 raise ProbeInconclusive(f"location not snapped (Valhalla error {code})") from error
             raise
         shape = trip["legs"][0]["shape"]
+        route_shape = decode_polyline(shape)
         attributes, last_error = None, None
         # edge_walk follows the route's own shape exactly; map_snap is the fallback when
         # edge_walk cannot (recorded per probe, so a reviewer can weigh the evidence).
@@ -294,7 +399,7 @@ class ValhallaRouter(Router):
             lat, lon = points[e["end_shape_index"]]
             edges.append(Edge(int(e["way_id"]), lat, lon,
                               _heading(e, "begin_heading"), _heading(e, "end_heading")))
-        return edges
+        return RouteEdges(edges, route_shape)
 
 
 # --------------------------------------------------------------------------- probe construction
@@ -332,6 +437,10 @@ def build_case(relation, ways, coords, node_ways):
     back = walk(approach_pts[::-1], min(start_target, approach_len * 0.4))
     start = Point(back[0][0], back[0][1], (back[1] + 180.0) % 360.0)
     case = Case(ident, kind, from_way, via, to_way, coords[via])
+    for way_id in node_ways.get(via, ()):
+        nodes = ways[way_id][1]
+        if all(n in coords for n in nodes):
+            case.geometry[way_id] = [coords[n] for n in nodes]
 
     def exits(way_id):
         tags_, nodes = ways[way_id]
@@ -388,13 +497,27 @@ def build_case(relation, ways, coords, node_ways):
 
 # --------------------------------------------------------------------------- judgement
 
-def via_transitions(edges, via):
-    """(incoming_way, outgoing_way, turn_angle) for each edge change exactly at the via node."""
-    for a, b in zip(edges, edges[1:]):
+def via_transitions(edges, via, with_index=False):
+    """(incoming_way, outgoing_way, turn_angle) for each edge change exactly at the via node
+    (plus the index of the incoming edge when ``with_index``)."""
+    for j, (a, b) in enumerate(zip(edges, edges[1:])):
         if haversine((a.end_lat, a.end_lon), via) <= VIA_MATCH_METRES:
             angle = (None if a.end_heading is None or b.begin_heading is None
                      else angle_between(a.end_heading, b.begin_heading))
-            yield a.way_id, b.way_id, angle
+            yield (a.way_id, b.way_id, angle, j) if with_index else (a.way_id, b.way_id, angle)
+
+
+def _run_bounds(edges, j):
+    """Start point of the decoded run on edges[j]'s way ending at edges[j], and end point of the
+    run on edges[j + 1]'s way starting at edges[j + 1] (None at the route's own start)."""
+    k = j
+    while k > 0 and edges[k - 1].way_id == edges[j].way_id:
+        k -= 1
+    start = None if k == 0 else (edges[k - 1].end_lat, edges[k - 1].end_lon)
+    m = j + 1
+    while m + 1 < len(edges) and edges[m + 1].way_id == edges[j + 1].way_id:
+        m += 1
+    return start, (edges[m].end_lat, edges[m].end_lon)
 
 
 def judge_probe(case, probe, edges):
@@ -411,9 +534,22 @@ def judge_probe(case, probe, edges):
         return "inconclusive", "route does not start in the probe direction (towards the via node)"
     if edges[-1].end_heading is not None and angle_between(edges[-1].end_heading, probe.end.heading) > 60:
         return "inconclusive", "route does not end in the probe direction (away from the via node)"
-    for incoming, outgoing, angle in via_transitions(edges, case.via):
+    shape = getattr(edges, "shape", None)
+    for incoming, outgoing, angle, j in via_transitions(edges, case.via, with_index=True):
         if incoming != case.from_way:
             continue
+        if shape and incoming in case.geometry and outgoing in case.geometry:
+            in_start, out_end = _run_bounds(edges, j)
+            # The decoder (trace_attributes on the route's shape) can pick the wrong way where
+            # several short ways sit within a few metres. Every verdict at the via node must be
+            # backed by the route's own shape lying on the decoded ways; otherwise the decoded
+            # ways are not evidence either way (never a pass, never a confirmed failure).
+            deviation = shape_supports(shape, case.via, case.geometry[incoming], case.geometry[outgoing],
+                                       in_start, out_end)
+            if deviation is None or deviation > SHAPE_TOLERANCE_METRES:
+                return "decode_mismatch", (
+                    f"decoded w{incoming} -> n{case.via_node} -> w{outgoing}, but the route's own shape is "
+                    + ("not at the via node" if deviation is None else f"up to {deviation:.1f} m off those ways"))
         if case.from_way == outgoing and angle is not None and angle < UTURN_DEGREES:
             continue  # straight through on the same way, not a U-turn
         if case.restriction.startswith("no_") and outgoing == case.to_way:
@@ -424,11 +560,20 @@ def judge_probe(case, probe, edges):
     return "pass", "complies"
 
 
-def judge_case(case, router):
+def translate_split_ways(edges, split_ways):
+    """Map way parts restriction_rewrite.py split off in the routing copy back to their OSM way."""
+    if not edges or not split_ways:
+        return edges
+    return RouteEdges([replace(e, way_id=split_ways.get(e.way_id, e.way_id)) for e in edges],
+                      getattr(edges, "shape", None))
+
+
+def judge_case(case, router, split_ways=None):
     results = []
     for p in case.probes:
         try:
-            status, detail = judge_probe(case, p, router.route(p.start, p.end))
+            edges = translate_split_ways(router.route(p.start, p.end), split_ways)
+            status, detail = judge_probe(case, p, edges)
         except ProbeInconclusive as error:
             status, detail = "inconclusive", str(error)
         result = {"target_way": p.target_way, "forbidden_target": p.forbidden,
@@ -445,6 +590,8 @@ def judge_case(case, router):
     # none violates the restriction; unresolved probes retain their status.
     if "fail" in statuses:
         overall = "fail"
+    elif "decode_mismatch" in statuses:
+        overall = "decode_mismatch"
     elif "inconclusive" in statuses:
         overall = "inconclusive"
     elif "no_route" in statuses:
@@ -506,17 +653,39 @@ def pbf_to_opl(pbf, opl):
 
 # --------------------------------------------------------------------------- driver
 
+def _read_rewrite_report(path, source_sha256):
+    report = json.loads(Path(path).read_text(encoding="utf-8"))
+    if report.get("schema") not in (1, 2) or report.get("restriction") not in ENGINE_UNSUPPORTED:
+        raise ValueError("not a restriction_rewrite report")
+    if not source_sha256 or report.get("input", {}).get("sha256") != source_sha256:
+        raise ValueError("rewrite report was made from a different extract")
+    return report
+
+
+def load_split_ways(path, source_sha256):
+    """{routing-copy way id: original OSM way id} for ways restriction_rewrite.py split at a via node.
+
+    Same SHA-256 check as load_rewrite_report. Split IDs must lie in the reserved range above
+    every OSM way, so a translation can never merge two real OSM ways.
+    """
+    report = _read_rewrite_report(path, source_sha256)
+    base = int(report.get("way_id_base", 0))
+    mapping = {}
+    for new, original in (report.get("split_ways") or {}).items():
+        new, original = int(new), int(original)
+        if not base or new < base or original >= base:
+            raise ValueError(f"split way {new} -> {original} outside the reserved id range")
+        mapping[new] = original
+    return mapping
+
+
 def load_rewrite_report(path, source_sha256):
     """IDs of relations restriction_rewrite.py replaced with engine-supported prohibitions.
 
     Fail closed: the report must describe exactly this source extract (SHA-256 match),
     otherwise nothing counts as rewritten.
     """
-    report = json.loads(Path(path).read_text(encoding="utf-8"))
-    if report.get("schema") != 1 or report.get("restriction") not in ENGINE_UNSUPPORTED:
-        raise ValueError("not a restriction_rewrite report")
-    if not source_sha256 or report.get("input", {}).get("sha256") != source_sha256:
-        raise ValueError("rewrite report was made from a different extract")
+    report = _read_rewrite_report(path, source_sha256)
     ids = set()
     for entry in report.get("rewritten", []):
         if entry.get("generated"):
@@ -524,10 +693,12 @@ def load_rewrite_report(path, source_sha256):
     return ids
 
 
-def run(ways, relations, coords_loader, router, region, rewritten=frozenset()):
-    """``rewritten``: (restriction type, relation id) pairs replaced before graph building."""
+def run(ways, relations, coords_loader, router, region, rewritten=frozenset(), split_ways=None):
+    """``rewritten``: (restriction type, relation id) pairs replaced before graph building.
+    ``split_ways``: {routing-copy way id: OSM way id} from the rewrite report; routes are
+    judged in original OSM way IDs."""
     counts, skipped, failures, by_type = Counter(), Counter(), [], Counter()
-    examples = {"no_route": [], "inconclusive": []}
+    examples = {"no_route": [], "inconclusive": [], "decode_mismatch": []}
     selected = []
     seen = set()
     for relation in relations:
@@ -562,7 +733,7 @@ def run(ways, relations, coords_loader, router, region, rewritten=frozenset()):
         if case is None:
             skipped[reason] += 1
             continue
-        status, probes = judge_case(case, router)
+        status, probes = judge_case(case, router, split_ways)
         enforced_by_rewrite = (case.restriction, case.relation) in rewritten
         if case.restriction in ENGINE_UNSUPPORTED and not enforced_by_rewrite:
             # The pinned engine's graph builder does not represent this
@@ -601,15 +772,17 @@ def run(ways, relations, coords_loader, router, region, rewritten=frozenset()):
             failures.append(record)
         elif status == "engine_unsupported":
             unsupported.append(record)
-        elif status in examples and len(examples[status]) < 50:
+        elif status == "decode_mismatch" or (status in examples and len(examples[status]) < 50):
             examples[status].append(record)
     tested = sum(counts.values())
     return {
         "schema": 1, "region": region,
         "restriction_relations": len(seen), "tested": tested,
-        "counts": {s: counts.get(s, 0) for s in ("pass", "fail", "engine_unsupported", "no_route", "inconclusive")},
+        "counts": {s: counts.get(s, 0) for s in ("pass", "fail", "engine_unsupported", "decode_mismatch",
+                                                 "no_route", "inconclusive")},
         "engine_unsupported": unsupported,
         "rewritten_tested": sorted(rewritten_tested),
+        "split_ways_translated": len(split_ways or {}),
         "engine_unsupported_note": ("Valhalla 3.6.3 tile building does not recognise these restriction "
                                     "types (only_u_turn), so they are not enforced. A real navigation "
                                     "risk, tracked separately; not a pass."),
@@ -618,6 +791,9 @@ def run(ways, relations, coords_loader, router, region, rewritten=frozenset()):
         "by_type": dict(sorted(by_type.items())),
         "failures": failures, "no_route_examples": examples["no_route"],
         "inconclusive_examples": examples["inconclusive"],
+        # Probes whose decoded ways at the via node are contradicted by the route's own shape.
+        # Never a pass and never a confirmed violation: like inconclusive, they need review.
+        "decode_mismatch": examples["decode_mismatch"],
         # Supported-probe violations and known-unsupported OSM restrictions
         # *both* keep this acceptance job red. Neither can safely be called
         # accepted until the routing engine or a verified route guard fixes it.
@@ -631,6 +807,7 @@ def run(ways, relations, coords_loader, router, region, rewritten=frozenset()):
             "Conditional, timed, vehicle-specific, way-via and flagged relations are skipped, not tested.",
             "A pass covers only the probed approach and destinations, not every possible route.",
             "no_route and inconclusive (probe snapped to another way) are not passes.",
+            "decode_mismatch (decoded ways contradicted by the route's own shape) is neither a pass nor a confirmed violation.",
         ],
     }
 
@@ -649,6 +826,12 @@ def summary_markdown(report):
         lines += ["", "**Not enforced by the routing engine (Valhalla 3.6.3 ignores only_u_turn):**", "",
                   "| Relation | Type | from | via | to |", "|---|---|---|---|---|"]
         for f in report["engine_unsupported"][:50]:
+            lines.append(f"| [r{f['relation']}]({f['osm_url']}) | {f['restriction']} | "
+                         f"w{f['from_way']} | n{f['via_node']} | w{f['to_way']} |")
+    if report.get("decode_mismatch"):
+        lines += ["", "**Decoded ways contradicted by the route's own shape (not a pass, not a confirmed "
+                  "violation; review):**", "", "| Relation | Type | from | via | to |", "|---|---|---|---|---|"]
+        for f in report["decode_mismatch"][:50]:
             lines.append(f"| [r{f['relation']}]({f['osm_url']}) | {f['restriction']} | "
                          f"w{f['from_way']} | n{f['via_node']} | w{f['to_way']} |")
     if report["failures"]:
@@ -694,12 +877,14 @@ def main(argv=None):
     args = p.parse_args(argv)
     if not args.graph.exists():
         p.error("Valhalla graph not found")
-    rewritten = frozenset()
+    rewritten, split_ways = frozenset(), {}
     if args.rewrite_report is not None:
         if args.pbf is None:
             p.error("--rewrite-report needs --pbf (its SHA-256 is checked against the report)")
         try:
-            rewritten = frozenset(load_rewrite_report(args.rewrite_report, file_sha256(args.pbf)))
+            source_sha = file_sha256(args.pbf)
+            rewritten = frozenset(load_rewrite_report(args.rewrite_report, source_sha))
+            split_ways = load_split_ways(args.rewrite_report, source_sha)
         except (OSError, ValueError, KeyError) as error:
             p.error(f"rewrite report rejected: {error}")
     with tempfile.TemporaryDirectory(prefix="drivemate-acceptance-opl-") as tmp:
@@ -713,7 +898,7 @@ def main(argv=None):
             p.error("OPL not found")
         ways, relations = read_opl(opl)
         report = run(ways, relations, lambda wanted: read_node_coords(opl, wanted),
-                     ValhallaRouter(args.graph), args.region, rewritten)
+                     ValhallaRouter(args.graph), args.region, rewritten, split_ways)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     text = summary_markdown(report)

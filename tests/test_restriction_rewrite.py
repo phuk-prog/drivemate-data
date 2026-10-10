@@ -50,13 +50,84 @@ class RewriteTests(unittest.TestCase):
         new, _, _ = rr.rewrite([uturn()], ways, COORDS)
         self.assertEqual({(EAST, "no_right_turn"), (WEST, "no_left_turn")}, generated(new))
 
-    def test_exit_way_through_via_is_skipped(self):
-        # Valhalla restricts only one edge of a to-way passing through the via node.
+    def test_exit_way_through_via_is_split_and_both_parts_banned(self):
+        # Valhalla restricts only one edge of a to-way passing through the via node, so the
+        # routing copy splits that way at the via node and bans each part separately.
+        ways = {SOUTH: road([1, 2]), 20: road([5, 2, 3], name="Cross Road", maxspeed="20 mph")}
+        result = rr.plan([uturn()], ways, COORDS)
+        new, report = result["new_relations"], result["report"]
+        part = rr.WAY_ID_BASE
+        self.assertEqual({(20, "no_left_turn"), (part, "no_right_turn")}, generated(new))
+        self.assertEqual([1], result["dropped"])
+        self.assertEqual({20: [5, 2]}, result["way_edits"])
+        self.assertEqual([(part, {"highway": "residential", "name": "Cross Road", "maxspeed": "20 mph"},
+                           [2, 3])], result["new_ways"])
+        self.assertEqual({str(part): 20}, report["split_ways"])
+        self.assertEqual(1, report["counts"]["split_ways"])
+        self.assertEqual([part], report["rewritten"][0]["split_ways"])
+        self.assertEqual(2, report["schema"])
+        # Same nodes overall, shared node at the via: geometry and connectivity unchanged.
+        first, (_, _, second) = result["way_edits"][20], result["new_ways"][0]
+        self.assertEqual([5, 2, 3], first + second[1:])
+
+    def test_one_way_through_via_bans_only_the_drivable_part(self):
+        ways = {SOUTH: road([1, 2]), 20: road([5, 2, 3], oneway="yes")}
+        new, _, report = rr.rewrite([uturn()], ways, COORDS)
+        self.assertEqual({(rr.WAY_ID_BASE, "no_right_turn")}, generated(new))  # 5 -> 2 only arrives
+        self.assertEqual(1, report["counts"]["split_ways"])
+
+    def test_split_repoints_other_relations(self):
+        ways = {SOUTH: road([1, 2]), 20: road([5, 2, 3]), 40: road([3, 4])}
+        part = rr.WAY_ID_BASE
+        other_restriction = (50, {"type": "restriction", "restriction": "no_left_turn"},
+                             [("w", 20, "from"), ("n", 3, "via"), ("w", 40, "to")])
+        route = (51, {"type": "route", "route": "road", "ref": "B1"},
+                 [("w", 40, ""), ("w", 20, ""), ("w", 99, "")])
+        result = rr.plan([uturn()], ways, COORDS, others=[other_restriction, route])
+        self.assertEqual({50: [("w", part, "from"), ("n", 3, "via"), ("w", 40, "to")],
+                          51: [("w", 40, ""), ("w", 20, ""), ("w", part, ""), ("w", 99, "")]},
+                         result["relation_edits"])
+        self.assertEqual([50, 51], result["report"]["splits"][0]["relations_repointed"])
+
+    def test_split_refused_when_another_relation_becomes_ambiguous(self):
         ways = {SOUTH: road([1, 2]), 20: road([5, 2, 3])}
+        at_same_via = (50, {"type": "restriction", "restriction": "no_right_turn"},
+                       [("w", 20, "from"), ("n", 2, "via"), ("w", SOUTH, "to")])
+        as_via_way = (52, {"type": "restriction", "restriction": "no_u_turn"},
+                      [("w", SOUTH, "from"), ("w", 20, "via"), ("w", SOUTH, "to")])
+        for other in (at_same_via, as_via_way):
+            result = rr.plan([uturn()], ways, COORDS, others=[other])
+            self.assertEqual(([], [], {}, {}), (result["new_relations"], result["dropped"],
+                                                result["way_edits"], result["relation_edits"]))
+            self.assertEqual({"split_conflicts_with_relation": 1}, result["report"]["skipped_by_reason"])
+            self.assertEqual({}, result["report"]["split_ways"])
+
+    def test_closed_way_through_via_is_not_split(self):
+        ways = {SOUTH: road([1, 2]), 20: road([5, 2, 3, 4, 5])}
         new, dropped, report = rr.rewrite([uturn()], ways, COORDS)
-        self.assertEqual([], new)
-        self.assertEqual([], dropped)
-        self.assertEqual({"exit_way_passes_through_via": 1}, report["skipped_by_reason"])
+        self.assertEqual(([], []), (new, dropped))
+        self.assertEqual({"exit_way_not_splittable": 1}, report["skipped_by_reason"])
+
+    def test_later_split_repoints_earlier_generated_relation(self):
+        coords = {**COORDS, 8: (53.4800, -2.2370), 9: (53.4810, -2.2385)}
+        ways = {SOUTH: road([1, 2]), 20: road([8, 3, 2]), 30: road([9, 3]), WEST: road([2, 5])}
+        second = (2, {"type": "restriction", "restriction": "only_u_turn"},
+                  [("w", 30, "from"), ("n", 3, "via"), ("w", 30, "to")])
+        new, dropped, report = rr.rewrite([uturn(), second], ways, coords)
+        part = rr.WAY_ID_BASE
+        self.assertEqual([1, 2], dropped)
+        self.assertEqual({str(part): 20}, report["split_ways"])
+        by_origin = {}
+        for _, tags, members in new:
+            by_origin.setdefault(tags["drivemate:rewritten_from"], set()).add((members[2][1], tags["restriction"]))
+        # r1 at node 2: its east exit is now the split-off part [3, 2], not w20 [8, 3].
+        self.assertEqual({(part, "no_right_turn"), (WEST, "no_left_turn")}, by_origin["1"])
+        # r2 at node 3, driving south: east part (w20 [8, 3]) is a left, west part a right.
+        self.assertEqual({(20, "no_left_turn"), (part, "no_right_turn")}, by_origin["2"])
+
+    def test_way_ids_must_stay_below_split_range(self):
+        with self.assertRaises(ValueError):
+            rr.rewrite([uturn()], plus(), COORDS, max_way_id=rr.WAY_ID_BASE)
 
     def test_opposite_carriageway_target_adds_u_turn_ban_on_from_way(self):
         ways = plus({70: road([2, 7], oneway="yes")})

@@ -626,8 +626,18 @@ def blocking(flag):
     return flag["type"] in BLOCKING_TYPES and flag.get("engine") == "valhalla"
 
 
+def translate_split_ways(route, split_ways):
+    """Map way parts restriction_rewrite.py split off in the routing copy back to their OSM way."""
+    if route is None or not split_ways:
+        return route
+    for seg in route.segments:
+        if seg.way_id in split_ways:
+            seg.way_id = split_ways[seg.way_id]
+    return route
+
+
 def run(journeys, routers, index, ratio_limit=DEFAULT_RATIO, snap=None, region="greater-manchester",
-        source=None):
+        source=None, split_ways=None):
     results = []
     for journey in journeys:
         if snap is not None:
@@ -638,7 +648,9 @@ def run(journeys, routers, index, ratio_limit=DEFAULT_RATIO, snap=None, region="
         routes, reasons, errors = {}, {}, {}
         for router in routers:
             try:
-                routes[router.name] = router.route(journey.origin, journey.destination)
+                # Judged in original OSM way IDs (split way parts translated back).
+                routes[router.name] = translate_split_ways(
+                    router.route(journey.origin, journey.destination), split_ways)
                 reasons[router.name] = router.last_reason
             except Exception as error:  # recorded per journey, never a pass
                 routes[router.name] = None
@@ -667,6 +679,7 @@ def run(journeys, routers, index, ratio_limit=DEFAULT_RATIO, snap=None, region="
         "restrictions_skipped": dict(sorted(index.skipped.items())),
         "valhalla_violations": valhalla_flags,
         "engine_unsupported": unsupported,
+        "split_ways_translated": len(split_ways or {}),
         "known_routing_safety_blockers": blockers,
         "accepted": blockers == 0,
         "results": results,
@@ -772,12 +785,14 @@ def main(argv=None):
             ra.pbf_to_opl(args.pbf, opl)
         elif not opl.is_file():
             p.error("OPL not found")
-        rewritten = frozenset()
+        rewritten, split_ways = frozenset(), {}
         if args.rewrite_report is not None:
             if args.pbf is None:
                 p.error("--rewrite-report needs --pbf (its SHA-256 is checked against the report)")
             try:
-                rewritten = frozenset(ra.load_rewrite_report(args.rewrite_report, ra.file_sha256(args.pbf)))
+                source_sha = ra.file_sha256(args.pbf)
+                rewritten = frozenset(ra.load_rewrite_report(args.rewrite_report, source_sha))
+                split_ways = ra.load_split_ways(args.rewrite_report, source_sha)
             except (ValueError, OSError) as error:
                 p.error(f"rewrite report rejected: {error}")
         index = load_index(opl, rewritten)
@@ -785,7 +800,7 @@ def main(argv=None):
     routers = [ValhallaRouter(args.graph), osrm]
     report = run(generate_journeys(args.journeys, args.seed), routers, index, args.ratio,
                  None if args.no_snap else osrm.nearest, args.region,
-                 {"sha256": args.source_sha256, "seed": args.seed})
+                 {"sha256": args.source_sha256, "seed": args.seed}, split_ways)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     text = markdown(report, args.top)

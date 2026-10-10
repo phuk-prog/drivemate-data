@@ -130,6 +130,21 @@ class Flags(unittest.TestCase):
                                  FakeRouter("osrm", node_route([1, 2, 1], idx))], idx)
         self.assertFalse(bad["accepted"])
 
+    def test_split_way_parts_are_judged_as_their_osm_way(self):
+        # restriction_rewrite.py may split a way at a via node in the routing copy; Valhalla then
+        # reports the new part's ID. Translated back, the forbidden turn is still caught.
+        idx = index([rel(503, "no_right_turn")])
+        part = 9_000_000_000_000
+        route = coord_route(idx, [(SOUTH, 1, 2), (part, 2, 3)])
+        osrm = FakeRouter("osrm", node_route([1, 2, 4], idx))
+        hidden = rc.run([JOURNEY], [FakeRouter("valhalla", route), osrm], idx)
+        self.assertEqual(hidden["known_routing_safety_blockers"], 0)  # why translation is required
+        route = coord_route(idx, [(SOUTH, 1, 2), (part, 2, 3)])
+        caught = rc.run([JOURNEY], [FakeRouter("valhalla", route), osrm], idx, split_ways={part: EAST})
+        self.assertEqual([v["relation"] for v in caught["valhalla_violations"]], [503])
+        self.assertFalse(caught["accepted"])
+        self.assertEqual(caught["split_ways_translated"], 1)
+
     def test_oneway_violation_node_and_coordinate_routes(self):
         idx = index(north_tags={"oneway": "-1"})  # only drivable 4 -> 2
         self.assertEqual(rc.oneway_violations(node_route([4, 2, 3], idx), idx), [])

@@ -135,7 +135,7 @@ in street photos and accept it, or add an app-side guard. Nothing was changed.
 
 ## Safety gate: known engine defects never counted as resolved
 
-The machine-readable report includes known_routing_safety_blockers, the sum of confirmed failed probes and unsupported engine restriction types. The `accepted` field now requires **both** counts to be zero. It is not a production release certificate: skipped, no-route and inconclusive restrictions still need separate evidence. The r14551046 prohibited left turn remains a confirmed failing case pending an actual supported routing fix; do not whitelist or downgrade it.
+The machine-readable report includes known_routing_safety_blockers, the sum of confirmed failed probes and unsupported engine restriction types. The `accepted` field now requires **both** counts to be zero. It is not a production release certificate: skipped, no-route and inconclusive restrictions still need separate evidence. The r14551046 prohibited left turn was treated as a confirmed failing case at the time. A later investigation (see "r14551046 is a checker decoding error" below) showed the route was legal and the checker misread it; it was not whitelisted.
 
 ## Paired terminal-edge investigation (2026-10-10)
 
@@ -199,9 +199,9 @@ substituted. New relations use IDs from 9,000,000,000,000 upwards, carry
 similar are not banned; an exit with unknown one-way state is banned.
 
 Left unchanged and reported (still `engine_unsupported`, still blocking): way-via or
-several from/to members, mixed restriction values, missing geometry, a from or to
-way passing through the via node, and **an exit way that passes through the via
-node**. The last is a measured engine limit: on a synthetic T-junction where the main
+several from/to members, mixed restriction values, missing geometry, and a from or to
+way passing through the via node. **An exit way that passes through the via node** was
+also skipped at first; it is now split (see the next section). The reason is a measured engine limit: on a synthetic T-junction where the main
 road is one way through the via node, Valhalla applied a simple restriction to only
 one of its two edges, whatever the turn type, so the other turn stayed open.
 
@@ -222,6 +222,90 @@ Local evidence (pyvalhalla 3.6.3, synthetic extract, before/after builds):
 `restriction_acceptance.py` on the same graphs: before 2 fail + 1 unsupported, after
 2 pass + 1 unsupported (exit code still 1). On live OSM data (API, 10 October 2026)
 r13442755 and r13613008 would be rewritten (2 and 1 prohibitions). r14121155 (Gradient
-Close) is skipped because its exit way passes through the via node, so it remains an
-open blocker. `route_crosscheck.py` does not yet read the rewrite report and still
-counts every `only_u_turn` as unenforced.
+Close) was skipped because its exit way passes through the via node; it is now handled
+by splitting (next section). `route_crosscheck.py` now also reads the rewrite report.
+
+## Splitting an exit road at the via node (r14121155, Gradient Close)
+
+At Gradient Close the exit road (w1058575301) is one OSM way running straight through the
+junction node, so it leaves the node in two directions. Valhalla 3.6.3 can ban a turn onto
+only one of those two directions, so the old rewrite skipped it and the U-turn-only rule
+stayed unenforced.
+
+`restriction_rewrite.py` now splits such a way at the junction node, **in the copy used to
+build the routing graph only** (the published map and the OSM data are not touched):
+
+* The first part keeps the OSM way ID; the second part gets a new ID from
+  9,000,000,000,000 upwards (the run fails if any input way already has an ID that high).
+  Both parts have exactly the original tags and nodes, and share the junction node, so the
+  road geometry, its rules and its connections are unchanged.
+* Every relation naming the way is updated. Turn restrictions get the one part that
+  touches their junction. Route and other relations list both parts in order. If any
+  relation would become ambiguous (for example a different restriction that uses this same
+  junction, or uses the way as a `via` way), nothing is split and the relation stays
+  skipped and blocking (`split_conflicts_with_relation`). Closed (ring) ways and ways
+  already split are not split (`exit_way_not_splittable`, `exit_way_already_split`).
+* The `no_*` bans are then generated against the correct part (left and right turn for
+  a T-junction).
+* The rewrite report (schema 2) lists `split_ways` as {new way ID: original OSM way ID}
+  and a `splits` record per way. `restriction_acceptance.py` and `route_crosscheck.py`
+  check the report matches the extract (SHA-256), reject mappings outside the reserved range,
+  and translate the new IDs back to the OSM way before judging any route. Without that
+  step a forbidden turn onto the new part would look like "a different road" and could go
+  unnoticed (a unit test proves this).
+
+Evidence, pyvalhalla 3.6.3, 10 October 2026:
+
+| Check | Result |
+|---|---|
+| Synthetic 4×4 grid, a T like Gradient Close, plus another restriction and a route relation on the through road | Before: both forbidden turns taken directly (148/149 m). After: both refused, legal 596/597 m detours. The other restriction (re-pointed to the new part) still enforced. |
+| Same grid, split only (no new bans) vs original | 506 of 506 routes identical (length, time and shape) |
+| Same grid, after vs original | 17 routes changed; every one of them used the now-banned turn before |
+| Acceptance on the grid | Before: 1 engine_unsupported (all 3 probes break the rule). After: 2 pass, 0 blockers |
+| Real OSM around Gradient Close (OSM API extract) | Before: r14121155 engine_unsupported, all 3 probes turn onto w1058575301. After: rewritten, 0 blockers; every probe now does the U-turn at the junction. Two exit probes are `inconclusive` (their destination snapped to a neighbouring road), so this is not counted as a pass. |
+
+The full Greater Manchester workflow still has to confirm this on the Geofabrik extract.
+
+## r14551046 is a checker decoding error, not an engine limitation
+
+The Greater Manchester run reported one failure: r14551046, `no_left_turn` from George
+Street (w210634704) at n10003180652 into a 7 m one-way driveway (w1092418640). The working
+idea was that Valhalla ignores a ban when the route's destination is on the banned road.
+
+**Minimal synthetic reproduction: not confirmed.** A one-way main road with a one-way
+driveway ban, driveway 100 m and 7 m long, with and without a legal second way into the
+junction, destination on the driveway at 80 % and 35 % and beyond it. With the ban,
+Valhalla never took the forbidden turn: it used the legal detour, or answered "no route"
+when there was none. Without the ban it turned directly every time. So Valhalla 3.6.3
+does enforce the ban when the destination is on the banned road, and no
+`destination_on_restricted_edge` status was added.
+
+**Real cause, found on a real OSM extract around George Street.** The checker reproduced
+the failure locally. But the route Valhalla returned is legal: it goes on along George
+Street (w1092418641) and turns into Barn Street (w26207340), passing exactly through node
+790071490, which is not on the driveway. The destination snapped onto Barn Street next to
+the driveway's end. With the ban the route is 49 m; with only this relation removed it is
+44 m and does use the driveway. These three ways form a tiny triangle (sides 5.1, 5.8 and
+6.9 m). The checker turns the route's line back into OSM roads with Valhalla's
+`trace_attributes` (`edge_walk`), and in that triangle it picked the driveway.
+
+**Fix (stricter, not looser).** For every decision the checker makes at the junction node
+(a failure or a pass), the route's own line must now lie on the OSM geometry of the
+decoded roads: within 1.5 m, for up to 10 m before and after the junction, and only along
+the stretch the decoder gave to each road. If it does not, the probe gets a new explicit
+status, `decode_mismatch`: never a pass and never a confirmed failure, listed with links
+in the JSON (`decode_mismatch`) and in the job summary. Like `inconclusive`, it is not
+counted in `known_routing_safety_blockers`. This follows the owner's existing rule that a
+probe that cannot be decoded is inconclusive, never a pass. It is not a release blocker,
+because the route was shown to be legal, but it still needs a human look.
+
+Proof that this does not hide real failures (real George Street extract):
+
+| Graph | Without the line check | With the line check |
+|---|---|---|
+| Real restrictions | 1 fail (r14551046) | 0 fail, 1 decode_mismatch (r14551046) |
+| All restriction relations removed (control) | 19 fail | the same 19 fail, r14551046 among them |
+
+So the George Street turn still fails when the engine really takes it.
+`route_crosscheck.py` uses the same decoder and does not have this line check yet.
+
