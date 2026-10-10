@@ -1,0 +1,831 @@
+{
+ "artifact_digests": {
+  "uk-map-validation": "sha256:f79512c31ed8b47cc46750101c7f369a3721d838e95f0e861f377e5fe41655b6",
+  "uk-routing-validation": "sha256:b1817bf9869c3eae2a2b7369a723e834a806351f72cfc9c49bb91f89f18c85a5"
+ },
+ "commit": "3e8c7a49848e03ab5f812afd9e61bd4920e21773",
+ "conclusion": "success",
+ "manchester_restriction_audit_counts": {
+  "complex_via": 15,
+  "conditional_relations": 4,
+  "flag_from_possible_oneway_orientation_conflict": 12,
+  "flag_from_way_does_not_touch_via": 1,
+  "flag_missing_required_role": 69,
+  "flag_multiple_from_members": 1,
+  "flag_multiple_to_members": 1,
+  "flag_referenced_road_not_in_sample": 5,
+  "flag_to_oneway_via_is_internal_node": 1,
+  "flag_to_possible_oneway_orientation_conflict": 23,
+  "motorcar_exceptions": 1,
+  "needs_review": 108,
+  "node_via": 656,
+  "way_via": 83
+ },
+ "manchester_topology_components": 94,
+ "mode": "validate_only (no publication)",
+ "osm_source_retrieved": "2026-10-10T06:20:42Z",
+ "osm_source_sha256": "7857cd61315982a4561b5775222d824892c29625a93ff9b68fc1c0ac4f5f1424",
+ "quality": {
+  "asset_snapshot_summary": {
+   "entries": 2,
+   "note": "Full per-asset snapshot is in the run artifact uk-map-validation (expires 2026-10-13).",
+   "sha256_of_canonical_json": "ef9dbb4d66e15d2d0b78d81dbdc83cd94d6042ae013b84619f9a678183de792e"
+  },
+  "errors": [],
+  "metrics": {
+   "camera_items": 18930,
+   "checked_place_records": 4560095,
+   "invalid_places_archives": 0,
+   "lane_files": 217,
+   "lane_ways": 593122,
+   "limit_files": 214,
+   "limit_ways": 1333420,
+   "map_bytes": 1639454841,
+   "offline_search_bytes": 31553412,
+   "place_bytes": 111042593,
+   "place_files": 903,
+   "roadinfo_files": 222,
+   "roadinfo_items": 417803,
+   "zone_items": 12
+  },
+  "nation_tile_probes": {
+   "errors": [],
+   "method": "23 sampled populated centres and full places-archive integrity scan; NOT nationwide geographic coverage",
+   "place_archive_audit": {
+    "files_checked": 903,
+    "invalid_or_empty": 0,
+    "records_checked": 4560095
+   },
+   "probes": {
+    "England": {
+     "city": "Manchester",
+     "layers": {
+      "lanes": {
+       "populated": true,
+       "present": true,
+       "records": 12340,
+       "tile": "lanes-106_-5.json"
+      },
+      "limits": {
+       "populated": true,
+       "present": true,
+       "records": 39707,
+       "tile": "limits-106_-5.json"
+      },
+      "places": {
+       "populated": true,
+       "present": true,
+       "records": 67853,
+       "tile": "places-213_-9.json.gz"
+      },
+      "roadinfo": {
+       "populated": true,
+       "present": true,
+       "records": 12184,
+       "tile": "roadinfo-106_-5.json"
+      }
+     }
+    },
+    "Northern Ireland": {
+     "city": "Belfast",
+     "layers": {
+      "lanes": {
+       "populated": true,
+       "present": true,
+       "records": 8313,
+       "tile": "lanes-109_-12.json"
+      },
+      "limits": {
+       "populated": true,
+       "present": true,
+       "records": 11152,
+       "tile": "limits-109_-12.json"
+      },
+      "places": {
+       "populated": true,
+       "present": true,
+       "records": 22825,
+       "tile": "places-218_-24.json.gz"
+      },
+      "roadinfo": {
+       "populated": true,
+       "present": true,
+       "records": 8589,
+       "tile": "roadinfo-109_-12.json"
+      }
+     }
+    },
+    "Scotland": {
+     "city": "Glasgow",
+     "layers": {
+      "lanes": {
+       "populated": true,
+       "present": true,
+       "records": 10421,
+       "tile": "lanes-111_-9.json"
+      },
+      "limits": {
+       "populated": true,
+       "present": true,
+       "records": 22053,
+       "tile": "limits-111_-9.json"
+      },
+      "places": {
+       "populated": true,
+       "present": true,
+       "records": 43127,
+       "tile": "places-223_-18.json.gz"
+      },
+      "roadinfo": {
+       "populated": true,
+       "present": true,
+       "records": 6847,
+       "tile": "roadinfo-111_-9.json"
+      }
+     }
+    },
+    "Wales": {
+     "city": "Cardiff",
+     "layers": {
+      "lanes": {
+       "populated": true,
+       "present": true,
+       "records": 6139,
+       "tile": "lanes-102_-7.json"
+      },
+      "limits": {
+       "populated": true,
+       "present": true,
+       "records": 11701,
+       "tile": "limits-102_-7.json"
+      },
+      "places": {
+       "populated": true,
+       "present": true,
+       "records": 17015,
+       "tile": "places-205_-13.json.gz"
+      },
+      "roadinfo": {
+       "populated": true,
+       "present": true,
+       "records": 3865,
+       "tile": "roadinfo-102_-7.json"
+      }
+     }
+    }
+   },
+   "regional_probes": {
+    "England": [
+     {
+      "city": "London",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 30350,
+        "tile": "lanes-103_-1.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 82860,
+        "tile": "limits-103_-1.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 210634,
+        "tile": "places-206_-1.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 45404,
+        "tile": "roadinfo-103_-1.json"
+       }
+      }
+     },
+     {
+      "city": "Birmingham",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 17183,
+        "tile": "lanes-104_-4.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 26948,
+        "tile": "limits-104_-4.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 60806,
+        "tile": "places-209_-8.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 9220,
+        "tile": "roadinfo-104_-4.json"
+       }
+      }
+     },
+     {
+      "city": "Bristol",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 7199,
+        "tile": "lanes-102_-6.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 13986,
+        "tile": "limits-102_-6.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 38024,
+        "tile": "places-205_-11.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 4594,
+        "tile": "roadinfo-102_-6.json"
+       }
+      }
+     },
+     {
+      "city": "Newcastle",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 7130,
+        "tile": "lanes-109_-4.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 15645,
+        "tile": "limits-109_-4.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 43906,
+        "tile": "places-219_-7.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 6438,
+        "tile": "roadinfo-109_-4.json"
+       }
+      }
+     },
+     {
+      "city": "Plymouth",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 5012,
+        "tile": "lanes-100_-9.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 6828,
+        "tile": "limits-100_-9.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 20027,
+        "tile": "places-201_-17.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 1348,
+        "tile": "roadinfo-100_-9.json"
+       }
+      }
+     },
+     {
+      "city": "Norwich",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 8872,
+        "tile": "lanes-105_2.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 28031,
+        "tile": "limits-105_2.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 18914,
+        "tile": "places-210_5.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 3050,
+        "tile": "roadinfo-105_2.json"
+       }
+      }
+     }
+    ],
+    "Northern Ireland": [
+     {
+      "city": "Derry/Londonderry",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 2744,
+        "tile": "lanes-109_-15.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 3094,
+        "tile": "limits-109_-15.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 3273,
+        "tile": "places-219_-30.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 1245,
+        "tile": "roadinfo-109_-15.json"
+       }
+      }
+     },
+     {
+      "city": "Newry",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 6296,
+        "tile": "lanes-108_-13.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 6367,
+        "tile": "limits-108_-13.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 4718,
+        "tile": "places-216_-26.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 2792,
+        "tile": "roadinfo-108_-13.json"
+       }
+      }
+     },
+     {
+      "city": "Omagh",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 2744,
+        "tile": "lanes-109_-15.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 3094,
+        "tile": "limits-109_-15.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 1822,
+        "tile": "places-218_-30.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 1245,
+        "tile": "roadinfo-109_-15.json"
+       }
+      }
+     },
+     {
+      "city": "Enniskillen",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 841,
+        "tile": "lanes-108_-16.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 1842,
+        "tile": "limits-108_-16.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 1903,
+        "tile": "places-217_-31.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 426,
+        "tile": "roadinfo-108_-16.json"
+       }
+      }
+     }
+    ],
+    "Scotland": [
+     {
+      "city": "Edinburgh",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 9028,
+        "tile": "lanes-111_-7.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 20433,
+        "tile": "limits-111_-7.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 37915,
+        "tile": "places-223_-13.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 6462,
+        "tile": "roadinfo-111_-7.json"
+       }
+      }
+     },
+     {
+      "city": "Aberdeen",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 7660,
+        "tile": "lanes-114_-5.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 13578,
+        "tile": "limits-114_-5.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 16308,
+        "tile": "places-228_-9.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 3534,
+        "tile": "roadinfo-114_-5.json"
+       }
+      }
+     },
+     {
+      "city": "Inverness",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 2906,
+        "tile": "lanes-114_-9.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 6058,
+        "tile": "limits-114_-9.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 5351,
+        "tile": "places-229_-17.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 496,
+        "tile": "roadinfo-114_-9.json"
+       }
+      }
+     },
+     {
+      "city": "Dundee",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 1730,
+        "tile": "lanes-112_-6.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 4040,
+        "tile": "limits-112_-6.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 11180,
+        "tile": "places-225_-12.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 1406,
+        "tile": "roadinfo-112_-6.json"
+       }
+      }
+     },
+     {
+      "city": "Dumfries",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 680,
+        "tile": "lanes-110_-8.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 1401,
+        "tile": "limits-110_-8.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 3582,
+        "tile": "places-220_-15.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 257,
+        "tile": "roadinfo-110_-8.json"
+       }
+      }
+     }
+    ],
+    "Wales": [
+     {
+      "city": "Swansea",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 8213,
+        "tile": "lanes-103_-8.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 10317,
+        "tile": "limits-103_-8.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 15992,
+        "tile": "places-206_-16.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 2201,
+        "tile": "roadinfo-103_-8.json"
+       }
+      }
+     },
+     {
+      "city": "Wrexham",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 13318,
+        "tile": "lanes-106_-6.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 49520,
+        "tile": "limits-106_-6.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 16082,
+        "tile": "places-212_-12.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 13307,
+        "tile": "roadinfo-106_-6.json"
+       }
+      }
+     },
+     {
+      "city": "Bangor",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 2431,
+        "tile": "lanes-106_-9.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 4688,
+        "tile": "limits-106_-9.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 4472,
+        "tile": "places-212_-17.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 911,
+        "tile": "roadinfo-106_-9.json"
+       }
+      }
+     },
+     {
+      "city": "Aberystwyth",
+      "layers": {
+       "lanes": {
+        "populated": true,
+        "present": true,
+        "records": 909,
+        "tile": "lanes-104_-9.json"
+       },
+       "limits": {
+        "populated": true,
+        "present": true,
+        "records": 3170,
+        "tile": "limits-104_-9.json"
+       },
+       "places": {
+        "populated": true,
+        "present": true,
+        "records": 2387,
+        "tile": "places-209_-17.json.gz"
+       },
+       "roadinfo": {
+        "populated": true,
+        "present": true,
+        "records": 457,
+        "tile": "roadinfo-104_-9.json"
+       }
+      }
+     }
+    ]
+   },
+   "warnings": [
+    "OS Open Names postcode/street search covers Great Britain, not Northern Ireland; presence of Northern Ireland places is not individual-address coverage."
+   ]
+  },
+  "version": 1,
+  "warnings": [
+   "OS Open Names postcode/street search covers Great Britain, not Northern Ireland; presence of Northern Ireland places is not individual-address coverage.",
+   "Optional source not available: mapillary_arrows",
+   "Optional source not available: mapillary_signs",
+   "Licence declarations require separate legal review; file fingerprints alone do not prove reuse rights."
+  ]
+ },
+ "routing_connectivity": {
+  "cases": [
+   {
+    "name": "Leeds\u2013York",
+    "road_km": 44.76,
+    "status": "route_found",
+    "straight_km": 35.41
+   },
+   {
+    "name": "Cardiff\u2013Swansea",
+    "road_km": 66.7,
+    "status": "route_found",
+    "straight_km": 55.1
+   },
+   {
+    "name": "Edinburgh\u2013Glasgow",
+    "road_km": 83.39,
+    "status": "route_found",
+    "straight_km": 67.02
+   },
+   {
+    "name": "Aberdeen\u2013Inverness",
+    "road_km": 170.34,
+    "status": "route_found",
+    "straight_km": 133.02
+   },
+   {
+    "name": "Derry\u2013Belfast",
+    "road_km": 116.36,
+    "status": "route_found",
+    "straight_km": 99.5
+   },
+   {
+    "name": "London\u2013Brighton",
+    "road_km": 85.99,
+    "status": "route_found",
+    "straight_km": 76.16
+   },
+   {
+    "name": "Bristol\u2013Exeter",
+    "road_km": 130.87,
+    "status": "route_found",
+    "straight_km": 105.19
+   },
+   {
+    "name": "Norwich\u2013Ipswich",
+    "road_km": 74.22,
+    "status": "route_found",
+    "straight_km": 64.65
+   },
+   {
+    "name": "Newcastle\u2013Carlisle",
+    "road_km": 95.12,
+    "status": "route_found",
+    "straight_km": 84.55
+   },
+   {
+    "name": "Wrexham\u2013Chester",
+    "road_km": 20.28,
+    "status": "route_found",
+    "straight_km": 17.62
+   },
+   {
+    "name": "Belfast\u2013Newry",
+    "road_km": 59.8,
+    "status": "route_found",
+    "straight_km": 53.76
+   }
+  ],
+  "checked": 11,
+  "investigate": 0,
+  "limitations": [
+   "Endpoint snapping may differ; sample failures are diagnostic, not proof of a missing road.",
+   "Passing probes cannot establish every connected component, legal turn or regional boundary.",
+   "This diagnostic report does not authorise new junction geometry or legal restrictions."
+  ],
+  "route_found": 11,
+  "scope": "Sampled offline routing connections, not complete UK graph or legal correctness"
+ },
+ "run_url": "https://github.com/phuk-prog/drivemate-data/actions/runs/38027913632",
+ "schema": 1
+}

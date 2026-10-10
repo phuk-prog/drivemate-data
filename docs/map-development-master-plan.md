@@ -195,3 +195,32 @@ source tiles were accounted for exactly once, with every payload compared
 byte-for-byte. The largest real package is 143,577,563 bytes. This tests the
 shared exporter only. It is not a ledger entry: ledger completions still
 require a GitHub workflow run once bulk expansion is approved.
+
+## Full UK validation-only build — result recorded (10 October 2026)
+
+The nonpublishing UK build listed above as "result pending"
+([run 38027913632](https://github.com/phuk-prog/drivemate-data/actions/runs/38027913632),
+commit `3e8c7a4`) **succeeded** in 57 minutes. Both publishers were skipped as
+designed. Compact evidence: `docs/validation/uk-validation-build-20261010.json`
+(the full artifacts expire on 13 October).
+
+- Map 1,639,454,841 bytes; 217 lane squares (593,122 ways); **214 speed-limit
+  squares (1,333,420 ways)**; **222 road-information squares** (409,835
+  warnings and landmarks); 903 places archives (4,560,095 records, 0 invalid);
+  18,930 cameras / level crossings; **12 charge and emission zones**; **offline
+  search file** with 2,768,087 records (31.6 MB). Whole-build quality gate passed.
+- All four nations have lanes, limits, road information and places in the
+  sample probes. Northern Ireland postcode and street search is still
+  missing (OS Open Names covers Great Britain only).
+- Routing graph built from the same OSM extract (SHA-256 `7857cd61…1424`),
+  and all 11 sampled UK journeys were found.
+- Manchester restriction audit: 739 turn-restriction relations sampled (656 node-via,
+  83 way-via), **108 flagged for human review** (for example missing roles and
+  possible one-way orientation conflicts). These are flags to check, not
+  proof of errors, and no turns were invented.
+- Mapillary sources were omitted, pending the rights review.
+
+This closes "Validate actual complete UK map" for generated-data quality.
+It makes **no licence decision**. These richer layers (limits, road
+information, zones, search) are not yet in the published release, so phones
+still lack them until a publication is approved.
