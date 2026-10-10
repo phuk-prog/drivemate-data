@@ -1,0 +1,123 @@
+name: DriveMate verify next UK map region (unpublished)
+
+on:
+  push:
+    branches: [codex/architecture-foundation]
+    paths:
+      - docs/regional-batch-request.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One expensive map run across UK pipeline, Manchester pilot, and regional jobs.
+concurrency:
+  group: map-data
+  cancel-in-progress: false
+
+jobs:
+  batch:
+    if: github.ref == 'refs/heads/codex/architecture-foundation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_SHA: 8ec2a5cd5e4373a5d75243c1aa46ccb40adb3a8dd9b821f06a3b2c765f9cf069
+      EXPECTED_BYTES: '1638441575'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Require deliberate and singular regional batch request
+        id: permission
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          req=json.loads(Path('docs/regional-batch-request.json').read_text())
+          assert req['schema']==1 and isinstance(req['sequence'],int)
+          assert req.get('enabled') is True, 'Bulk regional runs remain disabled until full Manchester and legal gates pass'
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write(f"sequence={req['sequence']}\n")
+          PY
+      - name: Preflight and dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q pmtiles==3.4.1 mapbox-vector-tile==2.2.0
+          python3 -m unittest discover -s tests -p test_region_batch_queue.py -v
+          python3 -m unittest discover -s tests -p test_region_pmtiles.py -v
+          mkdir -p work/source work/queue
+          df -h /
+      - name: Download existing verified UK PMTiles source
+        run: |
+          set -euo pipefail
+          gh release download map-data-uk --repo "${{ github.repository }}" \
+            --pattern drivemate.pmtiles --dir work/source
+          test "$(stat -c %s work/source/drivemate.pmtiles)" = "$EXPECTED_BYTES"
+          echo "$EXPECTED_SHA  work/source/drivemate.pmtiles" | sha256sum --check --strict
+      - name: Choose exactly one uncompleted z8 root
+        id: selection
+        run: |
+          set -euo pipefail
+          python3 scripts/region_pmtiles.py --source work/source/drivemate.pmtiles \
+            --output work/all-plan --plan-only
+          python3 scripts/region_batch_queue.py next \
+            --plan work/all-plan/regional-plan.json \
+            --ledger docs/regional-batch-ledger.json \
+            --output work/queue/selection.json
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          data=json.loads(Path('work/queue/selection.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as o:
+              o.write(f"has_work={str(data['status']=='selected').lower()}\n")
+              if data['status']=='selected': o.write(f"region={data['root']}\n")
+          PY
+      - name: Export and validate one verified UK region
+        if: steps.selection.outputs.has_work == 'true'
+        env:
+          ROOT: ${{ steps.selection.outputs.region }}
+        run: |
+          set -euo pipefail
+          python3 scripts/region_pmtiles.py --source work/source/drivemate.pmtiles \
+            --output work/next-region --pilot "$ROOT"
+          mkdir -p work/evidence
+          for archive in work/next-region/*.pmtiles; do
+            name="$(basename "$archive" .pmtiles)"
+            python3 scripts/verify_pmtiles.py "$archive" "work/evidence/${name}.json"
+          done
+          python3 scripts/region_batch_queue.py complete \
+            --selection work/queue/selection.json \
+            --manifest work/next-region/regional-manifest.json \
+            --ledger docs/regional-batch-ledger.json \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --output work/queue/updated-ledger.json
+      - name: Record passing batch without uploading map payloads
+        if: steps.selection.outputs.has_work == 'true'
+        env:
+          ROOT: ${{ steps.selection.outputs.region }}
+        run: |
+          set -euo pipefail
+          cp work/queue/updated-ledger.json docs/regional-batch-ledger.json
+          git config user.name "DriveMate map verification"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/regional-batch-ledger.json
+          git diff --cached --quiet && { echo "Nothing to checkpoint"; exit 1; }
+          git commit -m "Record validated UK regional root $ROOT"
+          # Never force a commit onto another author's newer changes.
+          git push origin HEAD:codex/architecture-foundation
+      - name: Retain lightweight evidence, not large map payloads
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: uk-regional-batch-evidence-${{ github.run_id }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            work/queue/*.json
+            work/next-region/regional-manifest.json
+            work/evidence/*.json

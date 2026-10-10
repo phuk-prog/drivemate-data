@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "source_sha256": "8ec2a5cd5e4373a5d75243c1aa46ccb40adb3a8dd9b821f06a3b2c765f9cf069",
+  "completed": {
+    "8/126/82": {
+      "passed": true,
+      "run_url": "https://github.com/phuk-prog/drivemate-data/actions/runs/38031100907",
+      "notes": "Manchester pilot validated 2026-10-10; test evidence and verified hashes in docs/regional-packaging.md"
+    }
+  }
+}
