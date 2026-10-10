@@ -1,0 +1,76 @@
+name: Greater Manchester OSM gap report
+
+# Informational only: lists places where OpenStreetMap lacks lanes, speed limits
+# or slip-road lane counts so they can be surveyed and added by hand. Nothing is
+# published, repaired or filled in, and gaps never fail the run.
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/architecture-foundation]
+    paths:
+      - scripts/osm_gap_report.py
+      - tests/test_osm_gap_report.py
+      - docs/validation/osm-gap-report.md
+      - .github/workflows/manchester-gaps.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: map-data
+  cancel-in-progress: false
+
+env:
+  SOURCE_URL: https://download.geofabrik.de/europe/united-kingdom/england/greater-manchester-latest.osm.pbf
+
+jobs:
+  gaps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool jq > /dev/null
+          mkdir -p work
+
+      - name: OpenStreetMap base (Geofabrik, Greater Manchester)
+        run: |
+          set -euo pipefail
+          curl -sSfL --retry 3 -o work/base.osm.pbf "$SOURCE_URL"
+          sha256sum work/base.osm.pbf | cut -d' ' -f1 > work/source.sha256
+          date -u +%FT%TZ > work/source-retrieved.txt
+          ls -lh work/base.osm.pbf
+          {
+            echo "### Source"
+            echo "- URL: $SOURCE_URL"
+            echo "- SHA-256: \`$(cat work/source.sha256)\`"
+            echo "- Retrieved: $(cat work/source-retrieved.txt)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Gap report (informational, never fails on gaps)
+        run: |
+          set -uo pipefail
+          python3 scripts/osm_gap_report.py --pbf work/base.osm.pbf \
+            --json work/osm-gaps.json --markdown work/osm-gaps.md \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            || echo "Gap report could not be produced (informational only)" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Retain gap report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: manchester-osm-gaps-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            work/osm-gaps.json
+            work/osm-gaps.md
+            work/source.sha256
+            work/source-retrieved.txt
