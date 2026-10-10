@@ -1,5 +1,7 @@
 """Search acceptance port: synthetic data only, no network."""
+import contextlib
 import gzip
+import io
 import json
 import pathlib
 import sys
@@ -88,12 +90,27 @@ class EndToEndTests(unittest.TestCase):
             (d / "q.json").write_text(json.dumps(qs))
             rep = sa.run(str(d / "s.tsv.gz"), qs["queries"])
             self.assertEqual([r["status"] for r in rep], ["PASS", "FAIL", "KNOWN-FAIL", "XPASS"])
-            self.assertEqual(sa.main([str(d / "s.tsv.gz"), str(d / "q.json"), "--out", str(d / "o.json")]), 1)
+            # The deliberately wrong "near" above makes main() print a FAIL line (23 km away). That is
+            # this test's own fixture, so keep it out of the CI log where it looks like a real failure.
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(sa.main([str(d / "s.tsv.gz"), str(d / "q.json"), "--out", str(d / "o.json")]), 1)
             qs["queries"].pop(1)
             (d / "q.json").write_text(json.dumps(qs))
-            self.assertEqual(sa.main([str(d / "s.tsv.gz"), str(d / "q.json"), "--out", str(d / "o.json"),
-                                      "--summary", str(d / "s.md")]), 0)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(sa.main([str(d / "s.tsv.gz"), str(d / "q.json"), "--out", str(d / "o.json"),
+                                          "--summary", str(d / "s.md")]), 0)
             self.assertIn("SK8 2EZ", (d / "s.md").read_text())
+
+    def test_postcode_spellings_all_find_the_same_point(self):
+        # Regression: the 23350 m "FAIL sk8 2ez" in CI came from the fixture above, not from search.
+        # Every spelling of the postcode must normalise like OfflineSearch.kt and hit the exact point.
+        with tempfile.TemporaryDirectory() as d:
+            write(pathlib.Path(d) / "s.tsv.gz")
+            for spelling in ("SK8 2EZ", "sk8 2ez", "sk82ez", " Sk8  2eZ ", "SK8-2EZ"):
+                with self.subTest(spelling=spelling):
+                    res = sa.search(str(pathlib.Path(d) / "s.tsv.gz"), spelling, (53.5, -2.5))
+                    self.assertEqual(res[0]["name"], "SK8 2EZ")
+                    self.assertLess(sa.distance_m((53.395466, -2.194193), (res[0]["lat"], res[0]["lon"])), 10)
 
     def test_shipped_queries_are_well_formed(self):
         data = json.loads((ROOT / "docs/validation/manchester-search-queries.json").read_text())
