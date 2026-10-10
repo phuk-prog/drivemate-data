@@ -3,6 +3,8 @@ name: Manchester search check
 # Builds the offline search file from OS Open Names (same download as map-data.yml) and checks
 # that real Greater Manchester places are found where they should be. Nothing is published.
 on:
+  schedule:
+    - cron: "57 22 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
   workflow_dispatch:
   push:
     paths:

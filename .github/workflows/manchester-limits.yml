@@ -5,6 +5,8 @@ name: Greater Manchester speed limit and camera acceptance
 # checkpoints whose expected values are explicit OSM tags. Fails only on a MISMATCH.
 # Detection only: nothing is published.
 on:
+  schedule:
+    - cron: "7 22 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
   workflow_dispatch:
   push:
     branches: [codex/architecture-foundation]

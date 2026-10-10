@@ -6,6 +6,8 @@ name: Greater Manchester turn-restriction acceptance
 # mandatory one (only_*) for simple OSM restriction relations. Detection only:
 # nothing is published, repaired or uploaded.
 on:
+  schedule:
+    - cron: "17 21 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
   workflow_dispatch:
   push:
     branches: [codex/architecture-foundation]

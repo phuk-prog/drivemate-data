@@ -6,6 +6,8 @@ name: Greater Manchester route cross-check (Valhalla vs OSRM)
 # except the report artifact. Fails only on restriction or one-way violations made by
 # Valhalla, plus restriction types Valhalla 3.6.3 does not enforce (as restriction acceptance).
 on:
+  schedule:
+    - cron: "7 20 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
   workflow_dispatch:
     inputs:
       journeys:

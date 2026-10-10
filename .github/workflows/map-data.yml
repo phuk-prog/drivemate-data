@@ -20,13 +20,14 @@ on:
         default: all
         options: [all, routing]
   schedule:
-    - cron: "17 3 * * 1" # every Monday morning, to stay up to date
+    - cron: "7 1 * * 1" # every Monday 01:07 UTC (2am UK summer), after Sunday's checks
   push:
     branches: [main]
     paths: [".github/workflows/map-data.yml", "scripts/**"]
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: map-data
@@ -404,6 +405,20 @@ jobs:
 
       - name: Verify publication rules
         run: python3 -m unittest discover -s tests -v
+
+      - name: Scheduled builds publish only after Sunday's checks all passed
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Each check must have a successful scheduled run on main within the last 30 hours.
+          # A missing, failed or cancelled check stops publishing; phones keep last week's data.
+          for wf in route-crosscheck.yml manchester-acceptance.yml manchester-limits.yml manchester-search.yml; do
+            ok=$(gh run list --workflow "$wf" --branch main --event schedule --limit 1 --json conclusion,createdAt \
+              --jq '.[0] | select(.conclusion == "success" and (.createdAt | fromdateiso8601) > (now - 108000)) | "ok"')
+            [ "$ok" = ok ] || { echo "::error::$wf has no passing scheduled run in the last 30 hours"; exit 1; }
+          done
 
       - name: Publish a complete immutable generation, then update the pointer
         if: github.event_name != 'workflow_dispatch' || inputs.validate_only == false

@@ -4,6 +4,8 @@ name: Greater Manchester OSM gap report
 # or slip-road lane counts so they can be surveyed and added by hand. Nothing is
 # published, repaired or filled in, and gaps never fail the run.
 on:
+  schedule:
+    - cron: "47 23 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
   workflow_dispatch:
   push:
     branches: [codex/architecture-foundation]
