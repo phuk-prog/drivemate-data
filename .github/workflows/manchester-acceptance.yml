@@ -1,0 +1,110 @@
+name: Greater Manchester turn-restriction acceptance
+
+# Builds a Valhalla 3.6.3 graph from the Geofabrik Greater Manchester extract
+# exactly as the routing job in map-data.yml builds the UK graph, then checks
+# that auto routing never takes a prohibited manoeuvre (no_*) and keeps to the
+# mandatory one (only_*) for simple OSM restriction relations. Detection only:
+# nothing is published, repaired or uploaded.
+on:
+  schedule:
+    - cron: "17 21 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
+  workflow_dispatch:
+  push:
+    branches: [codex/architecture-foundation]
+    paths:
+      - scripts/restriction_acceptance.py
+      - tests/test_restriction_acceptance.py
+      - scripts/restriction_rewrite.py
+      - tests/test_restriction_rewrite.py
+      - .github/workflows/manchester-acceptance.yml
+
+permissions:
+  contents: read
+
+# Shares the map-data group so it never overlaps the expensive map builds.
+concurrency:
+  group: map-data
+  cancel-in-progress: false
+
+env:
+  SOURCE_URL: https://download.geofabrik.de/europe/united-kingdom/england/greater-manchester-latest.osm.pbf
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool jq > /dev/null
+          mkdir -p work
+          python3 -m venv work/vh
+          work/vh/bin/pip install -q pyvalhalla==3.6.3 osmium==4.3.1
+          curl -sSfL -o work/valhalla_build_extract https://raw.githubusercontent.com/valhalla/valhalla/3.6.3/scripts/valhalla_build_extract
+          echo '37daac2ff760552c79431b41653be6d457e7e30d051e400c29064208fce65ae4  work/valhalla_build_extract' | sha256sum --check --strict
+
+      - name: OpenStreetMap base (Geofabrik, Greater Manchester)
+        run: |
+          set -euo pipefail
+          curl -sSfL --retry 3 -o work/base.osm.pbf "$SOURCE_URL"
+          sha256sum work/base.osm.pbf | cut -d' ' -f1 > work/source.sha256
+          date -u +%FT%TZ > work/source-retrieved.txt
+          osmium fileinfo -e -j work/base.osm.pbf | jq '{timestamp: .header.option.osmosis_replication_timestamp, data: .data.count}' > work/source-info.json || true
+          ls -lh work/base.osm.pbf
+          {
+            echo "### Source"
+            echo "- URL: $SOURCE_URL"
+            echo "- SHA-256: \`$(cat work/source.sha256)\`"
+            echo "- Retrieved: $(cat work/source-retrieved.txt)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Rewrite only_u_turn restrictions Valhalla 3.6.3 ignores (equivalent no_* relations)
+        run: |
+          set -euo pipefail
+          work/vh/bin/python scripts/restriction_rewrite.py --input work/base.osm.pbf \
+            --output work/rewritten.osm.pbf --report work/restriction-rewrite.json
+          jq -c '{counts, skipped_by_reason}' work/restriction-rewrite.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build the road graph (same commands as the map-data routing job)
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/work/vh/bin:$PATH"
+          mkdir -p work/tiles
+          python3 work/vh/lib/python3*/site-packages/valhalla/valhalla_build_config.py \
+            --mjolnir-tile-dir "$PWD/work/tiles" --mjolnir-tile-extract "$PWD/work/gm.tar" \
+            --mjolnir-admin "$PWD/work/admin.sqlite" --mjolnir-concurrency "$(nproc)" > work/valhalla.json
+          valhalla_build_admins -c work/valhalla.json work/rewritten.osm.pbf 2>&1 | tail -n 3
+          valhalla_build_tiles -c work/valhalla.json work/rewritten.osm.pbf 2>&1 | tail -n 5
+          python3 work/valhalla_build_extract -c work/valhalla.json -v 2>&1 | tail -n 2
+          rm -rf work/tiles
+          sha256sum work/gm.tar | cut -d' ' -f1 > work/graph.sha256
+          ls -lh work/gm.tar
+
+      - name: Check routes against OSM turn restrictions
+        run: |
+          set -euo pipefail
+          work/vh/bin/python scripts/restriction_acceptance.py \
+            --pbf work/base.osm.pbf --graph work/gm.tar --region greater-manchester \
+            --rewrite-report work/restriction-rewrite.json \
+            --report work/restriction-acceptance.json --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: manchester-restriction-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            work/restriction-acceptance.json
+            work/restriction-rewrite.json
+            work/source.sha256
+            work/source-retrieved.txt
+            work/source-info.json
+            work/graph.sha256

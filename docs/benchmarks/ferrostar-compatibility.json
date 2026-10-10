@@ -1,0 +1,404 @@
+{
+  "scope": "OSRM parser compatibility, not route-following or Android",
+  "ferrostar_source": "4e2d7f647952c0a4060efd584e6edfc6148092b9",
+  "input_sha256": {
+    "a10_cambridge_ely.osrm.json": "068bb9c5adbd8b12c7ddd02e86a2a72c3aafa991757ed33d20a57f55760f07ed",
+    "a1231_newcastle_sunderland.osrm.json": "19a2a6de0207d64333954f312378cc00d826a1b4c07b3f71ccd1485b1e868c82",
+    "a23_brighton_gatwick.osrm.json": "b709824c1f151116cbd6f09493114907468b3cb73fcf63c187eb7ba5cce8ea4f",
+    "a38_exeter_plymouth.osrm.json": "b05fe36449d17a22346204038b3bdddb034d437d04d9603daa4f08faa6ba1041",
+    "a40_london_heathrow.osrm.json": "6dd35156e62abf6b860c7abc65454381f6b88b015d64e114b0d2abe5615bcb9b",
+    "a45_birmingham_coventry.osrm.json": "1e108223216196493fa01a8366c15b1b74d59c0a421739f863d398b8ff7bee1b",
+    "a47_norwich_yarmouth.osrm.json": "2db6e06a07d282435f1430946ee4b08c8e1fce4326f5459548db8e460deed916",
+    "a483_chester_wrexham.osrm.json": "8a01cb2fa7229e2d2638fb4d30546f60e8929c6f91f162c259f7a0fa987a93e1",
+    "a4_bristol_bath.osrm.json": "8e90b48799737e93eac08ed0262bab32c618e32ce81da827f804da8d47cf5194",
+    "a591_keswick_ambleside.osrm.json": "08dfad534083be01df8b6b5de5eae29c38980d7ade2479dfb349b6737fa20718",
+    "a64_leeds_york.osrm.json": "47eaecfa365d670510e7c6448ec8eb7f578fbe0c09acb3dd8853a93491aba1f9",
+    "a6_stockport_buxton.osrm.json": "0db6209c508ae4513ee437ba62498d9cb06790c81ff482652f69a2f4fd9a61bc",
+    "a9_inverness_aviemore.osrm.json": "ca459f7468b6a30a5c23b5d98ea09c7e14927935bea3755e12223714cfd8cd12",
+    "hemel_magic_roundabout.osrm.json": "f2a0f460c880b7c231845cbb4a460e1b876e6b27e3607f3b59c284839bbf59e8",
+    "london_centre.osrm.json": "334de18cb368c159755186219400c7ea5a16888ca16c26f2888c646d96e1360c",
+    "m1_belfast_lisburn.osrm.json": "b1669ef7d9a9a087009edb8837262c55404601caa240ea33dce335bd70a3aea8",
+    "m1_leicester_nottingham.osrm.json": "91c42c4483b9383a0c2f7ccba224e5cbca69ff01cdef3a35f20c56c745ccd4d8",
+    "m27_southampton_portsmouth.osrm.json": "6c2138121fd9ec66c9e9e0f194689e2094a51de2ae142e0fa2cec7fe68f5f86f",
+    "m4_cardiff_newport.osrm.json": "6a9d27b6787af4d309f9f4f1d39eaa878339a7103c2dd0a0c013936ec8305351",
+    "m56_airport_bolton.osrm.json": "c616b61402ae66d478a937cc9296ee6347e0a14a740e826a98aac86ad920f384",
+    "m62_manchester_liverpool.osrm.json": "b1cba48738c7ccbfdea8139146def2fac2c081cf444478764d6daa87fda75ed5",
+    "m8_glasgow_edinburgh.osrm.json": "42839fae13b6dd41844efdbda0ec61329826d94083892affe1c485fe5f7c2720",
+    "milton_keynes_roundabouts.osrm.json": "7dc21b47d765e713d0e62974d410228d422530ea4355f1579acc0217275e3218",
+    "oxford_ring_road.osrm.json": "a517a4337ccdc865ff975acae14307dd6efa41dc49a402cb076f00a5f323c78b",
+    "replay_check_a6.osrm.json": "dc97ef9be330d70ce9a92a1e93b6b4ddb264aa2d808416a84be1b8dd1f9728b0",
+    "swindon_magic_roundabout.osrm.json": "99881b240b6afedd18a36b006f1e9afa62a94767d0cbcb3c2814ee25b32930ba"
+  },
+  "build_profile": "unoptimized debug",
+  "geometry_precision": 6,
+  "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+  "default": [
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 169.",
+      "fixture": "a10_cambridge_ely.osrm.json",
+      "median_ms": 0.01203,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 169.",
+      "fixture": "a1231_newcastle_sunderland.osrm.json",
+      "median_ms": 0.011714,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 289.",
+      "fixture": "a23_brighton_gatwick.osrm.json",
+      "median_ms": 0.015956,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 169.",
+      "fixture": "a38_exeter_plymouth.osrm.json",
+      "median_ms": 0.012341,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 169.",
+      "fixture": "a40_london_heathrow.osrm.json",
+      "median_ms": 0.012088,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 270.",
+      "fixture": "a45_birmingham_coventry.osrm.json",
+      "median_ms": 0.016104999999999998,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 169.",
+      "fixture": "a47_norwich_yarmouth.osrm.json",
+      "median_ms": 0.011505999999999999,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 270.",
+      "fixture": "a483_chester_wrexham.osrm.json",
+      "median_ms": 0.015925,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 170.",
+      "fixture": "a4_bristol_bath.osrm.json",
+      "median_ms": 0.011583999999999999,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 288.",
+      "fixture": "a591_keswick_ambleside.osrm.json",
+      "median_ms": 0.015822,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 168.",
+      "fixture": "a64_leeds_york.osrm.json",
+      "median_ms": 0.012044000000000001,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 170.",
+      "fixture": "a6_stockport_buxton.osrm.json",
+      "median_ms": 0.012480999999999999,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 387.",
+      "fixture": "a9_inverness_aviemore.osrm.json",
+      "median_ms": 0.023251,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 170.",
+      "fixture": "hemel_magic_roundabout.osrm.json",
+      "median_ms": 0.010596,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 287.",
+      "fixture": "london_centre.osrm.json",
+      "median_ms": 0.014947,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 370.",
+      "fixture": "m1_belfast_lisburn.osrm.json",
+      "median_ms": 0.019712,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 170.",
+      "fixture": "m1_leicester_nottingham.osrm.json",
+      "median_ms": 0.012515,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 170.",
+      "fixture": "m27_southampton_portsmouth.osrm.json",
+      "median_ms": 0.0118,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 271.",
+      "fixture": "m4_cardiff_newport.osrm.json",
+      "median_ms": 0.016316999999999998,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 170.",
+      "fixture": "m56_airport_bolton.osrm.json",
+      "median_ms": 0.011452,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 458.",
+      "fixture": "m62_manchester_liverpool.osrm.json",
+      "median_ms": 0.024192,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 170.",
+      "fixture": "m8_glasgow_edinburgh.osrm.json",
+      "median_ms": 0.012665,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 169.",
+      "fixture": "milton_keynes_roundabouts.osrm.json",
+      "median_ms": 0.010908,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 1192.",
+      "fixture": "oxford_ring_road.osrm.json",
+      "median_ms": 0.054719000000000004,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 188.",
+      "fixture": "replay_check_a6.osrm.json",
+      "median_ms": 0.011597999999999999,
+      "routes": 0
+    },
+    {
+      "accepted": false,
+      "error": "Failed to parse route json object: invalid type: map, expected a string at line 1 column 270.",
+      "fixture": "swindon_magic_roundabout.osrm.json",
+      "median_ms": 0.014582,
+      "routes": 0
+    }
+  ],
+  "polyline6": [
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a10_cambridge_ely.osrm.json",
+      "median_ms": 1.294211,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a1231_newcastle_sunderland.osrm.json",
+      "median_ms": 1.623678,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a23_brighton_gatwick.osrm.json",
+      "median_ms": 1.0741150000000002,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a38_exeter_plymouth.osrm.json",
+      "median_ms": 1.3659130000000002,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a40_london_heathrow.osrm.json",
+      "median_ms": 1.303965,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a45_birmingham_coventry.osrm.json",
+      "median_ms": 1.514627,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a47_norwich_yarmouth.osrm.json",
+      "median_ms": 0.967314,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a483_chester_wrexham.osrm.json",
+      "median_ms": 0.798075,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a4_bristol_bath.osrm.json",
+      "median_ms": 1.1099739999999998,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a591_keswick_ambleside.osrm.json",
+      "median_ms": 1.0259749999999999,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a64_leeds_york.osrm.json",
+      "median_ms": 1.574567,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a6_stockport_buxton.osrm.json",
+      "median_ms": 1.714357,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "a9_inverness_aviemore.osrm.json",
+      "median_ms": 1.176787,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "hemel_magic_roundabout.osrm.json",
+      "median_ms": 0.305384,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "london_centre.osrm.json",
+      "median_ms": 0.417404,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "m1_belfast_lisburn.osrm.json",
+      "median_ms": 0.757054,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "m1_leicester_nottingham.osrm.json",
+      "median_ms": 1.697625,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "m27_southampton_portsmouth.osrm.json",
+      "median_ms": 1.230788,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "m4_cardiff_newport.osrm.json",
+      "median_ms": 1.183662,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "m56_airport_bolton.osrm.json",
+      "median_ms": 0.838111,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "m62_manchester_liverpool.osrm.json",
+      "median_ms": 1.2330780000000001,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "m8_glasgow_edinburgh.osrm.json",
+      "median_ms": 1.399372,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "milton_keynes_roundabouts.osrm.json",
+      "median_ms": 0.619682,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "oxford_ring_road.osrm.json",
+      "median_ms": 0.649049,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "replay_check_a6.osrm.json",
+      "median_ms": 0.516558,
+      "routes": 1
+    },
+    {
+      "accepted": true,
+      "error": null,
+      "fixture": "swindon_magic_roundabout.osrm.json",
+      "median_ms": 0.28797,
+      "routes": 1
+    }
+  ],
+  "cargo_lock_sha256": "2a3b5a46cd785feeb870a71a05229031990c3cf60fcf9a9950bd7a755001db79"
+}

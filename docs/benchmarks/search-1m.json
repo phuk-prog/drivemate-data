@@ -1,0 +1,162 @@
+{
+  "scope": "synthetic desktop candidate retrieval; not Android application timing",
+  "fixture": "generated names at (0,0); no driving traces or UK data",
+  "fixture_sha256": "0223a1519be95728f7b2e76a92ae0b47b98456ab7f412a16b345844d9bf9018a",
+  "rows": 1000000,
+  "repeats": 5,
+  "python": "3.12.14",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "sqlite": "3.53.1",
+  "build_seconds": 4.245665112000097,
+  "gzip_bytes": 5034457,
+  "sqlite_bytes": 102551552,
+  "queries": [
+    {
+      "query": "place0000000",
+      "candidate_count": 1,
+      "equivalent": true,
+      "gzip_scan": {
+        "median_ms": 0.053968,
+        "max_ms": 0.157495,
+        "samples_ms": [
+          0.157495,
+          0.066028,
+          0.053968,
+          0.046489,
+          0.043231
+        ]
+      },
+      "sqlite_index": {
+        "median_ms": 0.01398,
+        "max_ms": 0.181942,
+        "samples_ms": [
+          0.181942,
+          0.019725,
+          0.01398,
+          0.012842,
+          0.012399
+        ]
+      }
+    },
+    {
+      "query": "place0500000",
+      "candidate_count": 1,
+      "equivalent": true,
+      "gzip_scan": {
+        "median_ms": 239.709901,
+        "max_ms": 265.924571,
+        "samples_ms": [
+          233.666672,
+          239.709901,
+          265.924571,
+          242.330585,
+          231.312997
+        ]
+      },
+      "sqlite_index": {
+        "median_ms": 0.021307,
+        "max_ms": 0.125444,
+        "samples_ms": [
+          0.125444,
+          0.021307,
+          0.013353,
+          0.031237,
+          0.015245
+        ]
+      }
+    },
+    {
+      "query": "place0999999",
+      "candidate_count": 1,
+      "equivalent": true,
+      "gzip_scan": {
+        "median_ms": 473.18806,
+        "max_ms": 509.648178,
+        "samples_ms": [
+          471.69296,
+          476.403721,
+          473.18806,
+          509.648178,
+          471.073148
+        ]
+      },
+      "sqlite_index": {
+        "median_ms": 0.014452,
+        "max_ms": 0.146915,
+        "samples_ms": [
+          0.146915,
+          0.021256,
+          0.014336,
+          0.014452,
+          0.012579
+        ]
+      }
+    },
+    {
+      "query": "zzzz",
+      "candidate_count": 0,
+      "equivalent": true,
+      "gzip_scan": {
+        "median_ms": 473.647842,
+        "max_ms": 486.367733,
+        "samples_ms": [
+          473.647842,
+          465.222305,
+          486.367733,
+          471.800821,
+          479.558598
+        ]
+      },
+      "sqlite_index": {
+        "median_ms": 0.012054,
+        "max_ms": 0.138856,
+        "samples_ms": [
+          0.138856,
+          0.019497,
+          0.011818,
+          0.012054,
+          0.010492
+        ]
+      }
+    },
+    {
+      "query": "place",
+      "candidate_count": 400,
+      "equivalent": true,
+      "gzip_scan": {
+        "median_ms": 0.463705,
+        "max_ms": 0.637959,
+        "samples_ms": [
+          0.637959,
+          0.463705,
+          0.343016,
+          0.590071,
+          0.340637
+        ]
+      },
+      "sqlite_index": {
+        "median_ms": 0.372364,
+        "max_ms": 0.592223,
+        "samples_ms": [
+          0.424693,
+          0.592223,
+          0.362347,
+          0.372364,
+          0.348245
+        ]
+      }
+    }
+  ],
+  "unmeasured": [
+    "Android latency",
+    "memory",
+    "battery",
+    "cold disk cache",
+    "destination ranking",
+    "actual UK data coverage"
+  ],
+  "implementation_sha256": {
+    "scripts/search_index.py": "552fe23594c0aa2e0e3d7a3b538f831cba48e2972ad769d0f375a48d5d6bd379",
+    "scripts/benchmark_search_index.py": "33eb06e7801b298c385cea0f48db2faeac82f09eece9a9f9b0f49a39710d929b"
+  }
+}

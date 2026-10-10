@@ -1,0 +1,27 @@
+name: Restore map update pointer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/repair-map-updates]
+    paths: [".github/workflows/repair-map-pointer.yml", "scripts/publish_map_data.py", "tests/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: map-data
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify publication rules
+        run: python3 -m unittest discover -s tests -v
+      - name: Restore the pointer to existing published map files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_map_data.py bootstrap --repo phuk-prog/drivemate-data --tag map-data-20261008-bootstrap

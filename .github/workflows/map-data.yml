@@ -4,29 +4,47 @@ name: Build our own map data
 #  - drivemate.pmtiles: the map pictures (the app fetches just the squares it needs)
 #  - lanes-<row>_<col>.json: lane counts and arrows, in half-degree squares (fetched along your route)
 #  - places-<row>_<col>.json.gz: businesses and places from Overture, quarter-degree squares (for search)
+#  - places-provenance.json: per-source counts, Overture release and licence notices for the places (not legal clearance)
+#  - roadinfo-<row>_<col>.json: road warnings and turn landmarks, half-degree squares (fetched along your route)
+#  - search-offline-uk.tsv.gz: every GB postcode, street and named place, for search with no signal
 on:
   workflow_dispatch:
+    inputs:
+      validate_only:
+        description: Build and validate without publishing or changing release pointers
+        type: boolean
+        default: true
+      components:
+        description: Build maps and routing, or routing only
+        type: choice
+        default: all
+        options: [all, routing]
   schedule:
-    - cron: "17 3 * * 1" # every Monday morning, to stay up to date
+    - cron: "7 1 * * 1" # every Monday 01:07 UTC (2am UK summer), after Sunday's checks
   push:
     branches: [main]
     paths: [".github/workflows/map-data.yml", "scripts/**"]
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: map-data
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   REGION: europe/united-kingdom
   TAG: map-data-uk
+  XTAG: map-data-uk-extra
+  PLANETILER_VERSION: '0.10.1'
+  PLANETILER_SHA256: 5e5e7d8c4fc89b4573cc9109d0a543c3c2c798b2bcde7c3dcd2214031ee59c29
 
 jobs:
   build:
+    if: inputs.components != 'routing'
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +64,25 @@ jobs:
           sudo apt-get install -y -qq osmium-tool jq > /dev/null
           mkdir -p work out/lanes
 
+      - name: Validate dependencies and runner capacity before the UK build
+        run: |
+          set -euo pipefail
+          python3 -m pip install shapely==2.2.0 pyproj==3.8.0 PyYAML==6.0.3 pmtiles==3.4.1 mapbox-vector-tile==2.2.0
+          python3 scripts/unified_preflight.py --repo . --base-sha HEAD
+          java -version
+          osmium --version
+          python3 - <<'PY'
+          import shutil
+          from pathlib import Path
+          memory = int(next(line.split()[1] for line in Path('/proc/meminfo').read_text().splitlines()
+                            if line.startswith('MemTotal:'))) * 1024
+          disk = shutil.disk_usage('.').free
+          print(f'Runner capacity: {memory / 1024**3:.1f} GiB RAM, {disk / 1024**3:.1f} GiB free disk')
+          if memory < 14 * 1024**3 or disk < 35 * 1024**3:
+              raise SystemExit('Runner too small for the 12 GiB Java heap and full UK workspace; no build started')
+          PY
+          printf 'build_commit=%s\nbuild_run=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" >> out/build-info.txt
+
       - name: Check the Ordnance Survey key
         env:
           OS_API_KEY: ${{ secrets.OS_API_KEY }}
@@ -63,20 +100,22 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          curl -sSfL -o work/planetiler.jar https://github.com/onthegomap/planetiler/releases/latest/download/planetiler.jar
+          curl -sSfL -o work/planetiler.jar "https://github.com/onthegomap/planetiler/releases/download/v${PLANETILER_VERSION}/planetiler.jar"
+          printf '%s  %s\n' "$PLANETILER_SHA256" work/planetiler.jar | sha256sum --check --strict
           java -Xmx12g -jar work/planetiler.jar --osm-path=work/base.osm.pbf --output=out/drivemate.pmtiles \
             --download --download-dir=work/sources --force 2>&1 | tail -n 25
           ls -lh out/drivemate.pmtiles
-          # GitHub allows 2 GB per file: if it's bigger, leave out house numbers (not needed while driving).
+          # Preserve house numbers. Oversized maps require compatible regional packaging.
           if [ $(stat -c %s out/drivemate.pmtiles) -gt 1950000000 ]; then
-            echo "Too big for one download; rebuilding without house numbers"
-            java -Xmx12g -jar work/planetiler.jar --osm-path=work/base.osm.pbf --output=out/drivemate.pmtiles \
-              --download-dir=work/sources --force --exclude_layers=housenumber 2>&1 | tail -n 5
-            ls -lh out/drivemate.pmtiles
+            echo "::error::Map exceeds the package size limit; regional packaging is required. House numbers retained."
+            exit 1
           fi
           echo "map_bytes=$(stat -c %s out/drivemate.pmtiles)" >> out/build-info.txt
           # A real UK map is hundreds of MB; a tiny file means the build failed.
           [ $(stat -c %s out/drivemate.pmtiles) -gt 50000000 ] || { echo "::error::Map file is too small - build failed"; exit 1; }
+
+      - name: Verify every generated map payload before producing navigation layers
+        run: python3 scripts/verify_pmtiles.py out/drivemate.pmtiles work/pmtiles-validation.json --uk-samples
 
       - name: Lane, junction and speed data (from OpenStreetMap), in squares
         run: |
@@ -88,6 +127,85 @@ jobs:
           python3 scripts/lanes.py work/roads.geojsonseq out/lanes
           ls out/lanes | wc -l; du -sh out/lanes
 
+      - name: Review sampled OSM junction topology without guessing road connections
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/topology
+          # Reference-complete samples: a road leaving the rectangle retains its
+          # node references. Sample boundaries can still create false dead-ends.
+          for area in manchester belfast; do
+            case "$area" in
+              manchester) bbox="-2.32,53.45,-2.17,53.53" ;;
+              belfast) bbox="-6.02,54.56,-5.84,54.64" ;;
+            esac
+            osmium extract -b "$bbox" -S relations=false work/base.osm.pbf \
+              -o "work/topology/${area}.osm.pbf" --overwrite
+            osmium tags-filter -R "work/topology/${area}.osm.pbf" \
+              w/highway=motorway,trunk,primary,secondary,tertiary,motorway_link,trunk_link,primary_link,secondary_link,tertiary_link,unclassified,residential,living_street,service,track,road \
+              -f opl,add_metadata=false -o "work/topology/${area}-roads.opl" --overwrite
+            python3 scripts/junction_topology.py \
+              --opl "work/topology/${area}-roads.opl" --region "$area" \
+              --report "work/topology/${area}-report.json" --minimum-ways 100
+            # No publication or automatic topology edits: diagnostics are not ground truth.
+            python3 - "work/topology/${area}-report.json" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, sys
+          from pathlib import Path
+          report = json.loads(Path(sys.argv[1]).read_text())
+          print(f"### Road connectivity diagnostic: {report['region']}")
+          print(f"- Road ways examined: {report['road_ways']:,}")
+          print(f"- Node-sharing components: {report['components']:,}")
+          print(f"- Major-road endpoint candidates: {report['possible_major_road_ends']:,} (not proven errors)")
+          print(f"- Potential level-conflict examples: {report['potential_level_conflicts_shown']} (review only)")
+          print("- No turns or new road connections have been inferred or published.")
+          PY
+          done
+
+      - name: Examine sampled turn restrictions without creating illegal junction turns
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/restrictions
+          for area in manchester belfast; do
+            case "$area" in
+              manchester) bbox="-2.32,53.45,-2.17,53.53" ;;
+              belfast) bbox="-6.02,54.56,-5.84,54.64" ;;
+            esac
+            # Smart extraction retains restriction relation members which a
+            # basic complete-ways-only regional extract cannot guarantee.
+            osmium extract -s smart -S types=restriction -b "$bbox" work/base.osm.pbf \
+              -o "work/restrictions/${area}.osm.pbf" --overwrite
+            osmium tags-filter -R "work/restrictions/${area}.osm.pbf" w/highway \
+              -f opl,add_metadata=false -o "work/restrictions/${area}-roads.opl" --overwrite
+            osmium tags-filter -R "work/restrictions/${area}.osm.pbf" r/type=restriction \
+              -f opl,add_metadata=false -o "work/restrictions/${area}-relations.opl" --overwrite
+            python3 scripts/restriction_audit.py \
+              --ways "work/restrictions/${area}-roads.opl" \
+              --relations "work/restrictions/${area}-relations.opl" \
+              --region "$area" --report "work/restrictions/${area}-report.json" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
+      # Mapillary painted-arrow step removed 10 Oct 2026 (owner decision): Mapillary's terms
+      # forbid use in navigation (see docs/licensing-decision-brief.md). Lanes come from OSM only.
+
+      - name: Road warnings and turn landmarks (from OpenStreetMap), in squares
+        shell: bash
+        run: |
+          set -o pipefail
+          # Speed bumps, hazard signs, cameras, level crossings, toll booths, schools, traffic lights,
+          # stop signs and well-known named places: on the phone, so they work with no signal.
+          python3 scripts/roadinfo.py --selftest
+          osmium tags-filter work/base.osm.pbf \
+            n/traffic_calming=bump,hump,table,cushion,yes n/hazard n/highway=speed_camera,traffic_signals,stop \
+            n/railway=level_crossing n/barrier=toll_booth w/amenity=school \
+            nwr/amenity=fuel,pub,place_of_worship,fast_food nwr/shop=supermarket \
+            -o work/roadinfo.osm.pbf --overwrite
+          osmium export work/roadinfo.osm.pbf -f geojsonseq -o work/roadinfo.geojsonseq --overwrite \
+            --geometry-types=point,linestring,polygon -a type,id
+          python3 scripts/roadinfo.py work/roadinfo.geojsonseq out/roadinfo | tee -a out/build-info.txt
+          ls out/roadinfo | wc -l; du -sh out/roadinfo
+
       - name: Speed cameras and level crossings (whole UK)
         run: |
           osmium tags-filter work/base.osm.pbf n/highway=speed_camera n/railway=level_crossing r/type=enforcement \
@@ -96,36 +214,381 @@ jobs:
           python3 scripts/cameras.py work/cameras.opl out/cameras-uk.json | tee -a out/build-info.txt
           ls -lh out/cameras-uk.json
 
+      - name: Speed limits (whole UK, OpenStreetMap only), in squares
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/limits.py --selftest
+          osmium tags-filter work/base.osm.pbf w/maxspeed -o work/maxspeed.osm.pbf --overwrite
+          osmium export work/maxspeed.osm.pbf -f geojsonseq -o work/maxspeed.geojsonseq --overwrite --geometry-types=linestring -u type_id
+          osmium tags-filter work/base.osm.pbf w/highway=motorway -o work/motorways.osm.pbf --overwrite
+          osmium export work/motorways.osm.pbf -f geojsonseq -o work/motorways.geojsonseq --overwrite --geometry-types=linestring -u type_id
+          # OSM only: Mapillary sign detections removed 10 Oct 2026 (owner decision; terms forbid navigation use).
+          python3 scripts/limits.py work/maxspeed.geojsonseq out/limits work/motorways.geojsonseq out/limit-checks.md \
+            | tee -a out/build-info.txt
+          echo 'limit_sources=OpenStreetMap maxspeed only (no Mapillary)' >> out/build-info.txt
+          ls out/limits | wc -l; du -sh out/limits
+          cat out/limit-checks.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Charge and emission zones (Congestion Charge, ULEZ, Clean Air Zones, Scottish LEZs)
+        shell: bash
+        run: |
+          set -o pipefail
+          pip install -q pyproj shapely
+          python3 scripts/zones.py --selftest
+          osmium tags-filter work/base.osm.pbf r/boundary=low_emission_zone w/boundary=low_emission_zone \
+            -o work/zones.osm.pbf --overwrite
+          osmium export work/zones.osm.pbf -f geojsonseq -o work/zones.geojsonseq --overwrite --geometry-types=polygon
+          # Official London boundaries (Transport for London on the London Datastore, Open Government
+          # Licence v2). If the direct link has moved, ask the Datastore for the dataset's current file.
+          # A failed download only means OpenStreetMap's zone (if any) is used: a warning, not a failure.
+          london() {  # dataset id, direct link, output file
+            curl -sSfL --retry 3 -m 180 -o "$3" "$2" && return 0
+            url=$(curl -sSf -m 60 "https://data.london.gov.uk/api/action/package_show?id=$1" |
+              jq -r '[.result.resources[] | select((.url // "") | test("\\.geojson$"; "i")) | .url][0] // empty') &&
+              [ -n "$url" ] && curl -sSfL --retry 3 -m 180 -o "$3" "$url" && return 0
+            echo "::warning::Could not download $3 from the London Datastore"; rm -f "$3"; return 1
+          }
+          official=()
+          london v8onw "https://data.london.gov.uk/download/v8onw/936d71d8-c5fc-40ad-a392-6bec86413b48/CentralUltraLowEmissionZone.geojson" \
+            work/london-ccz.geojson && official+=(--official "London Congestion Charge=work/london-ccz.geojson")
+          london vd455 "https://data.london.gov.uk/download/vd455/0cab9a8b-ca8a-47b0-aaf8-0e77a9041a19/LondonWideUltraLowEmissionZone.geojson" \
+            work/london-ulez.geojson && official+=(--official "London ULEZ=work/london-ulez.geojson")
+          # Birmingham's Clean Air Zone = inside the A4540 Middleway: traced from OpenStreetMap roads
+          # (the council's own boundary file is under a restricted Ordnance Survey licence).
+          osmium extract -b -1.96,52.44,-1.84,52.52 work/base.osm.pbf -o work/bham.osm.pbf --overwrite
+          osmium tags-filter work/bham.osm.pbf w/highway -o work/bham-roads.osm.pbf --overwrite
+          osmium export work/bham-roads.osm.pbf -f geojsonseq -o work/bham-roads.geojsonseq --overwrite --geometry-types=linestring
+          python3 scripts/zones.py work/zones.geojsonseq out/charge-zones-uk.json "${official[@]}" \
+            --birmingham-roads work/bham-roads.geojsonseq | tee -a out/build-info.txt
+          ls -lh out/charge-zones-uk.json
+
       - name: Businesses, places and streets (Overture + OpenStreetMap + OS Open Names), merged, in squares
         run: |
           pip install -q overturemaps pyarrow pyproj
           mkdir -p out/places work/osnames
-          # Overture (businesses)
-          overturemaps download --bbox=-8.7,49.8,1.8,60.9 -f geoparquet --type=place -o work/places.parquet || echo "::warning::Overture download failed"
+          # Overture (businesses). Resolve the latest release first and download exactly that
+          # release, so places-provenance.json can name it. If it cannot be resolved (or this
+          # overturemaps version lacks the releases command) download as before and record "unknown".
+          overture_release=$(overturemaps releases latest 2>/dev/null | tail -n 1 | tr -d '[:space:]' || true)
+          if [[ "$overture_release" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\.[0-9]+$ ]]; then
+            if ! overturemaps download --bbox=-8.7,49.8,1.8,60.9 -f geoparquet --type=place --release "$overture_release" \
+              -o work/places.parquet; then
+              # Never lose Overture places just because pinning failed; record the release as unknown.
+              echo "::warning::Pinned Overture download failed; retrying latest without recording a release"
+              overture_release=unknown
+              overturemaps download --bbox=-8.7,49.8,1.8,60.9 -f geoparquet --type=place -o work/places.parquet \
+                || echo "::warning::Overture download failed"
+            fi
+          else
+            echo "::warning::Overture release could not be resolved; provenance will record it as unknown"
+            overture_release=unknown
+            overturemaps download --bbox=-8.7,49.8,1.8,60.9 -f geoparquet --type=place -o work/places.parquet || echo "::warning::Overture download failed"
+          fi
+          echo "overture_release=$overture_release" | tee -a out/build-info.txt
           # OpenStreetMap points of interest (from the UK file we already have)
           osmium tags-filter work/base.osm.pbf nwr/amenity nwr/shop nwr/tourism nwr/leisure nwr/office nwr/craft nwr/healthcare \
             -o work/pois.osm.pbf --overwrite
           osmium tags-filter work/pois.osm.pbf nwr/name nwr/brand -o work/pois-named.osm.pbf --overwrite
           osmium export work/pois-named.osm.pbf -f geojsonseq -o work/pois.geojsonseq --overwrite --geometry-types=point,polygon
+          # OpenStreetMap house numbers (approved 10 Oct 2026): "12 Menai Grove" style search where OSM has them.
+          osmium tags-filter work/base.osm.pbf nwr/addr:housenumber -o work/addr.osm.pbf --overwrite
+          osmium tags-filter work/addr.osm.pbf nwr/addr:street -o work/addr-street.osm.pbf --overwrite
+          osmium export work/addr-street.osm.pbf -f geojsonseq -o work/addresses.geojsonseq --overwrite --geometry-types=point,polygon
           # Ordnance Survey Open Names (official streets and places; free download)
           url=$(curl -sSf "https://api.os.uk/downloads/v1/products/OpenNames/downloads?area=GB&format=CSV" | jq -r '.[0].url') && \
             curl -sSfL -o work/opennames.zip "$url" && unzip -q -o work/opennames.zip -d work/osnames || echo "::warning::OS Open Names download failed"
-          python3 scripts/places.py out/places --overture work/places.parquet --osm work/pois.geojsonseq --osnames work/osnames
+          # Also writes out/places/places-provenance.json (per-source counts and notices; not legal clearance).
+          python3 scripts/places.py out/places --overture work/places.parquet --overture-release "$overture_release" \
+            --osm work/pois.geojsonseq --osm-addresses work/addresses.geojsonseq --osnames work/osnames
+          test -s out/places/places-provenance.json
           ls out/places | wc -l; du -sh out/places
 
-      - name: Publish the map files
+      - name: Offline postcode and place search (OS Open Names), one file for the phone
+        run: |
+          set -eo pipefail
+          python3 scripts/search_offline.py --selftest
+          # No OS Open Names this week (download failed above): keep last week's file in the release.
+          if [ -z "$(find work/osnames -name '*.csv' 2>/dev/null | head -1)" ]; then
+            echo "::warning::No OS Open Names: offline search file not rebuilt this week"; exit 0
+          fi
+          # Northern Ireland streets and towns: OSNI Open Data Gazetteers (LPS, Open Government Licence).
+          # Best effort only: the resource URL is looked up in the OpenDataNI CKAN API, then the
+          # data.gov.uk mirror; any failure builds without NI and never fails this step.
+          # NI postcodes (ONSPD/NSPL BT rows) must not be bundled, so none are fetched.
+          osni_url() {
+            local id api url
+            for id in "$@"; do
+              for api in "https://admin.opendatani.gov.uk/api/3/action/package_show?id=$id" \
+                         "https://ckan.publishing.service.gov.uk/api/action/package_show?id=$id"; do
+                url=$(curl -sSfL --max-time 60 "$api" 2>/dev/null | jq -r '
+                  [.result.resources[]? | select((.format // "" | ascii_upcase) == "CSV")][0].url
+                  // [.result.resources[]? | select((.format // "" | ascii_upcase) == "GEOJSON")][0].url
+                  // empty' 2>/dev/null) || url=""
+                if [ -n "$url" ]; then echo "$url"; return 0; fi
+              done
+            done
+            return 1
+          }
+          osni_fetch() {   # $1 = output stem, rest = dataset ids
+            local stem=$1 url ext; shift
+            url=$(osni_url "$@") || { echo "::warning::OSNI $stem: no download URL from OpenDataNI or data.gov.uk" >&2; return 1; }
+            case "$url" in *.geojson|*.json|*geojson*) ext=geojson ;; *) ext=csv ;; esac
+            if curl -sSfL --retry 2 --max-time 600 -o "work/osni/$stem.$ext" "$url" \
+               && [ -s "work/osni/$stem.$ext" ] && [ "$(head -c 1 "work/osni/$stem.$ext")" != "<" ]; then
+              echo "work/osni/$stem.$ext"
+            else
+              echo "::warning::OSNI $stem download failed ($url)" >&2; rm -f "work/osni/$stem.$ext"; return 1
+            fi
+          }
+          mkdir -p work/osni
+          osni_args=()
+          if f=$(osni_fetch streets osni-open-data-gazetteer-streetnames osni-opendata-gazetteer-streetnames); then
+            osni_args+=(--osni-streets "$f")
+          fi
+          if f=$(osni_fetch places osni-open-data-gazetteer-place-names osni-open-data-gazetteer-place-names7); then
+            osni_args+=(--osni-places "$f")
+          fi
+          if [ ${#osni_args[@]} -gt 0 ] && python3 scripts/search_offline.py work/osnames out/search-offline-uk.tsv.gz \
+               "${osni_args[@]}" > work/search-offline-stats.json; then
+            echo "Offline search includes Northern Ireland (OSNI gazetteer): $(jq -c '.osni' work/search-offline-stats.json)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            [ ${#osni_args[@]} -gt 0 ] && echo "::warning::OSNI gazetteer not usable: offline search built without Northern Ireland"
+            [ ${#osni_args[@]} -gt 0 ] || echo "::warning::OSNI gazetteer not downloaded: offline search built without Northern Ireland"
+            python3 scripts/search_offline.py work/osnames out/search-offline-uk.tsv.gz > work/search-offline-stats.json
+          fi
+          tee -a out/build-info.txt < work/search-offline-stats.json
+          ls -lh out/search-offline-uk.tsv.gz
+          echo "Offline search: $(du -h out/search-offline-uk.tsv.gz | cut -f1) ($(zcat out/search-offline-uk.tsv.gz | wc -l) lines)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Regional map packages (nationwide z0-9 base + z10-14 regions), verified
+        env:
+          # Approved by the owner 10 Oct 2026; set repo variable PUBLISH_REGIONAL_MAPS=false to stop.
+          PUBLISH_REGIONAL_MAPS: ${{ vars.PUBLISH_REGIONAL_MAPS || 'true' }}
+        run: |
+          set -euo pipefail
+          python3 scripts/region_pmtiles.py --source out/drivemate.pmtiles --output work/regions \
+            --available-dir out
+          mkdir -p work/region-validation
+          for archive in work/regions/*.pmtiles; do
+            python3 scripts/verify_pmtiles.py "$archive" "work/region-validation/$(basename "$archive" .pmtiles).json" > /dev/null
+          done
+          count=$(ls work/regions/*.pmtiles | wc -l)
+          echo "regional_packages=$count verified" | tee -a out/build-info.txt
+          if [ "${PUBLISH_REGIONAL_MAPS:-}" = "true" ]; then
+            python3 scripts/region_publication.py --regions work/regions --out out/regions --map out/drivemate.pmtiles
+          else
+            echo "Regional packages verified but not staged (PUBLISH_REGIONAL_MAPS is not true)"
+          fi
+          cp work/regions/regional-manifest.json work/region-validation/ 2>/dev/null || true
+          rm -rf work/regions
+
+      - name: Record source fingerprints and rights-review status
+        run: |
+          python3 scripts/source_inventory.py --osm work/base.osm.pbf \
+            --osm-url "https://download.geofabrik.de/${REGION}-latest.osm.pbf" \
+            --overture work/places.parquet --os-names work/opennames.zip \
+            --mapillary-arrows out/mapillary-arrows-cache.json.gz \
+            --mapillary-signs out/mapillary-signs-cache.json.gz \
+            --planetiler-sources work/sources \
+            --out out/source-inventory.json
+          python3 scripts/source_inventory.py --validate out/source-inventory.json
+
+      - name: Whole-build data quality gate
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Map data: UK" \
-            --notes "DriveMate's own map files, rebuilt weekly from OpenStreetMap (© OpenStreetMap contributors, ODbL)." --prerelease
-          # One file at a time, each retried: big batches of uploads can be cut off part-way.
-          up() { for i in 1 2 3 4 5; do gh release upload "$TAG" "$1" --clobber && return 0; sleep $((i * 20)); done; echo "::error::upload failed: $1"; return 1; }
-          failed=0
-          up out/drivemate.pmtiles || failed=1
-          for f in out/build-info.txt out/cameras-uk.json out/lanes/*.json out/places/*.json.gz; do up "$f" || failed=1; done
-          [ $failed = 0 ] || exit 1
-          {
-            echo "## Map data built"
-            echo "Map file: $(du -h out/drivemate.pmtiles | cut -f1) · lane squares: $(ls out/lanes | wc -l) ($(du -sh out/lanes | cut -f1)) · place squares: $(ls out/places | wc -l) ($(du -sh out/places | cut -f1))"
-          } >> "$GITHUB_STEP_SUMMARY"
+          # Compare with the previous published build when its quality summary exists.
+          gh release download "$TAG" -p build-quality.json -D work --clobber 2>/dev/null || true
+          python3 scripts/validate_build.py out work/build-quality.json out/build-quality.json work/pmtiles-validation.json
+          cat out/build-quality.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify publication rules
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Scheduled builds publish only after Sunday's checks all passed
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Each check must have a successful scheduled run on main within the last 30 hours.
+          # A missing, failed or cancelled check stops publishing; phones keep last week's data.
+          for wf in route-crosscheck.yml manchester-acceptance.yml manchester-limits.yml manchester-search.yml; do
+            ok=$(gh run list --workflow "$wf" --branch main --event schedule --limit 1 --json conclusion,createdAt \
+              --jq '.[0] | select(.conclusion == "success" and (.createdAt | fromdateiso8601) > (now - 108000)) | "ok"')
+            [ "$ok" = ok ] || { echo "::error::$wf has no passing scheduled run in the last 30 hours"; exit 1; }
+          done
+
+      - name: Publish a complete immutable generation, then update the pointer
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only == false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/publish_map_data.py publish --repo phuk-prog/drivemate-data \
+            --tag "map-data-$(date -u +%Y%m%d)-r${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" --out out --navigation-data
+
+      - name: Retain map validation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: uk-map-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: |
+            out/build-info.txt
+            out/build-quality.json
+            out/build-quality.md
+            out/source-inventory.json
+            out/places/places-provenance.json
+            out/limit-checks.md
+            work/topology/*-report.json
+            work/restrictions/*-report.json
+            work/pmtiles-validation.json
+            work/region-validation/*.json
+            build/reports/unified-preflight.json
+
+  # Whole-UK road graph for routes worked out on the phone with no signal (Valhalla Mobile 0.6.3
+  # reads Valhalla 3.6.3 graphs). Own release "routing-uk": the pieces of each build are uploaded
+  # first, checked, and only then does routing-uk.json (what phones read) switch to them.
+  routing:
+    needs: build
+    if: always() && (needs.build.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.components == 'routing'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      RTAG: routing-uk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make room
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool jq pigz > /dev/null
+          python3 -m venv work/vh
+          work/vh/bin/pip install -q pyvalhalla==3.6.3 osmium==4.3.1
+          curl -sSfL -o work/valhalla_build_extract https://raw.githubusercontent.com/valhalla/valhalla/3.6.3/scripts/valhalla_build_extract
+          echo '37daac2ff760552c79431b41653be6d457e7e30d051e400c29064208fce65ae4  work/valhalla_build_extract' | sha256sum --check --strict
+
+      - name: OpenStreetMap base (Geofabrik, whole UK)
+        run: |
+          curl -sSfL -o work/base.osm.pbf "https://download.geofabrik.de/${REGION}-latest.osm.pbf"
+          sha256sum work/base.osm.pbf | cut -d' ' -f1 > work/source.sha256
+          date -u +%FT%TZ > work/source-retrieved.txt
+          ls -lh work/base.osm.pbf
+
+      - name: Build the road graph
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/work/vh/bin:$PATH"
+          # Valhalla 3.6.3 ignores only_u_turn: replace simple ones with equivalent no_* relations.
+          work/vh/bin/python scripts/restriction_rewrite.py --input work/base.osm.pbf \
+            --output work/rewritten.osm.pbf --report work/restriction-rewrite.json
+          mv work/rewritten.osm.pbf work/base.osm.pbf
+          # Let Valhalla apply access and restriction semantics to the full source.
+          # Filtering highway classes can discard explicitly vehicle-accessible ways.
+          mkdir -p work/tiles
+          python3 work/vh/lib/python3*/site-packages/valhalla/valhalla_build_config.py \
+            --mjolnir-tile-dir "$PWD/work/tiles" --mjolnir-tile-extract "$PWD/work/uk.tar" \
+            --mjolnir-admin "$PWD/work/admin.sqlite" --mjolnir-concurrency "$(nproc)" > work/valhalla.json
+          # Country boundaries from the full file: they set driving side and country rules.
+          valhalla_build_admins -c work/valhalla.json work/base.osm.pbf 2>&1 | tail -n 3
+          valhalla_build_tiles -c work/valhalla.json work/base.osm.pbf 2>&1 | tail -n 5
+          python3 work/valhalla_build_extract -c work/valhalla.json -v 2>&1 | tail -n 2
+          rm -rf work/tiles work/base.osm.pbf
+          ls -lh work/uk.tar
+          jq -c '{counts, skipped_by_reason}' work/restriction-rewrite.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test journeys across the UK (must all work before publishing)
+        run: |
+          mkdir -p work/empty
+          work/vh/bin/python - <<'PY'
+          import json, math
+          from valhalla import Actor, get_config
+          a = Actor(get_config(tile_extract="work/uk.tar", tile_dir="work/empty", verbose=False))
+          trips = {
+              "Stockport - Liverpool": ((53.4052, -2.1575), (53.4075, -2.9919)),
+              "Stockport - Sheffield": ((53.4052, -2.1575), (53.3781, -1.4697)),
+              "Manchester - Wrexham": ((53.4774, -2.2309), (53.0466, -2.9925)),
+              "Carlisle - Gretna": ((54.8925, -2.9329), (54.9947, -3.0646)),
+              "London - Cardiff": ((51.5074, -0.1278), (51.4816, -3.1791)),
+              "Belfast - Lisburn": ((54.5973, -5.9301), (54.5162, -6.0580)),
+          }
+          bad = 0
+          for name, (s, e) in trips.items():
+              try:
+                  r = json.loads(a.route(json.dumps({"locations": [{"lat": s[0], "lon": s[1]}, {"lat": e[0], "lon": e[1]}], "costing": "auto", "units": "kilometers"})))
+                  km = r["trip"]["summary"]["length"]
+                  crow = 6371 * math.acos(min(1, math.sin(math.radians(s[0])) * math.sin(math.radians(e[0])) + math.cos(math.radians(s[0])) * math.cos(math.radians(e[0])) * math.cos(math.radians(e[1] - s[1]))))
+                  ok = crow <= km <= crow * 2.5
+                  print(f"{'ok ' if ok else 'BAD'} {name}: {km:.1f} km by road ({crow:.1f} km straight)")
+                  bad += not ok
+              except Exception as ex:
+                  print(f"BAD {name}: {ex}")
+                  bad += 1
+          raise SystemExit(1 if bad else 0)
+          PY
+
+      - name: Survey extra UK road connections (diagnostics, never invented turns)
+        run: |
+          mkdir -p work/empty
+          work/vh/bin/python scripts/routing_connectivity.py \
+            --graph work/uk.tar --report work/routing-connectivity.json
+          cat work/routing-connectivity.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the road graph
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only == false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          STAMP="$(date -u +%Y%m%d)-r${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}"
+          export STAMP
+          mkdir -p work/routing-out
+          sha256sum work/uk.tar | cut -d' ' -f1 > work/graph.sha256
+          stat -c %s work/uk.tar > work/graph.bytes
+          pigz -6 -c work/uk.tar > work/uk.tar.gz
+          split -b 1900M -d -a 2 work/uk.tar.gz "work/routing-out/valhalla-uk-$STAMP.tar.gz.part"
+          rm work/uk.tar.gz
+          python3 - <<'PYTHON'
+          import datetime, json, os
+          from pathlib import Path
+          out = Path('work/routing-out')
+          parts = sorted(out.glob('*.part*'))
+          document = {
+              'engine': 'valhalla-3.6.3',
+              'sha256': Path('work/graph.sha256').read_text().strip(),
+              'bytes': int(Path('work/graph.bytes').read_text()),
+              'download_bytes': sum(p.stat().st_size for p in parts),
+              'built': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'parts': [p.name for p in parts],
+              'source': {
+                  'licence': 'ODbL-1.0', 'license_url': 'https://opendatacommons.org/licenses/odbl/1-0/', 'attribution': '© OpenStreetMap contributors',
+                  'url': 'https://download.geofabrik.de/' + os.environ['REGION'] + '-latest.osm.pbf',
+                  'sha256': Path('work/source.sha256').read_text().strip(),
+                  'retrieved_at': Path('work/source-retrieved.txt').read_text().strip()},
+              'build_commit': os.environ['GITHUB_SHA'],
+              'build_run': os.environ['GITHUB_RUN_ID'],
+              'coverage_validation': 'Six route smoke checks; not proof of every road or legal restriction'}
+          (out / 'routing-uk.json').write_text(json.dumps(document, indent=2) + '\n')
+          PYTHON
+          python3 scripts/publish_routing_data.py --repo "$GITHUB_REPOSITORY" \
+            --out work/routing-out --tag "routing-uk-$STAMP"
+          echo 'Graph chunks and decoded checksum verified; previous generations retained.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain routing validation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: uk-routing-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: |
+            work/routing-connectivity.json
+            work/source.sha256
+            work/source-retrieved.txt

@@ -1,0 +1,540 @@
+{
+  "scope": "Complete archive structure, gzip and MVT format; not road or address ground truth",
+  "sha256": "8ec2a5cd5e4373a5d75243c1aa46ccb40adb3a8dd9b821f06a3b2c765f9cf069",
+  "bytes": 1638441575,
+  "errors": [],
+  "tools": {
+    "pmtiles": "3.4.1",
+    "mapbox-vector-tile": "2.2.0"
+  },
+  "uk_samples": {
+    "England": [
+      {
+        "city": "Manchester",
+        "zxy": [
+          14,
+          8089,
+          5300
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 206,
+          "housenumber": 377,
+          "landcover": 979,
+          "landuse": 69,
+          "place": 32,
+          "poi": 5008,
+          "transportation": 869,
+          "transportation_name": 478,
+          "water": 27,
+          "water_name": 14,
+          "waterway": 45
+        }
+      },
+      {
+        "city": "London",
+        "zxy": [
+          14,
+          8186,
+          5448
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 510,
+          "housenumber": 329,
+          "landcover": 233,
+          "landuse": 73,
+          "park": 2,
+          "place": 47,
+          "poi": 5064,
+          "transportation": 1108,
+          "transportation_name": 442,
+          "water": 15,
+          "water_name": 13,
+          "waterway": 4
+        }
+      },
+      {
+        "city": "Birmingham",
+        "zxy": [
+          14,
+          8105,
+          5375
+        ],
+        "layer_features": {
+          "aeroway": 1,
+          "building": 63,
+          "housenumber": 346,
+          "landcover": 67,
+          "landuse": 88,
+          "place": 15,
+          "poi": 3476,
+          "transportation": 558,
+          "transportation_name": 279,
+          "water": 11,
+          "water_name": 17,
+          "waterway": 22
+        }
+      },
+      {
+        "city": "Bristol",
+        "zxy": [
+          14,
+          8074,
+          5451
+        ],
+        "layer_features": {
+          "building": 65,
+          "housenumber": 533,
+          "landcover": 353,
+          "landuse": 128,
+          "park": 3,
+          "place": 42,
+          "poi": 3829,
+          "transportation": 637,
+          "transportation_name": 452,
+          "water": 5,
+          "water_name": 11,
+          "waterway": 16
+        }
+      },
+      {
+        "city": "Newcastle",
+        "zxy": [
+          14,
+          8118,
+          5183
+        ],
+        "layer_features": {
+          "aeroway": 1,
+          "building": 16,
+          "housenumber": 69,
+          "landcover": 82,
+          "landuse": 44,
+          "place": 13,
+          "poi": 1218,
+          "transportation": 321,
+          "transportation_name": 154,
+          "water": 4,
+          "water_name": 4
+        }
+      },
+      {
+        "city": "Plymouth",
+        "zxy": [
+          14,
+          8003,
+          5529
+        ],
+        "layer_features": {
+          "building": 24,
+          "housenumber": 414,
+          "landcover": 93,
+          "landuse": 49,
+          "place": 26,
+          "poi": 1935,
+          "transportation": 334,
+          "transportation_name": 282,
+          "water": 4,
+          "water_name": 5
+        }
+      },
+      {
+        "city": "Norwich",
+        "zxy": [
+          14,
+          8251,
+          5364
+        ],
+        "layer_features": {
+          "building": 46,
+          "housenumber": 328,
+          "landcover": 68,
+          "landuse": 51,
+          "park": 2,
+          "place": 9,
+          "poi": 2117,
+          "transportation": 226,
+          "transportation_name": 262,
+          "water": 5,
+          "water_name": 8,
+          "waterway": 4
+        }
+      }
+    ],
+    "Scotland": [
+      {
+        "city": "Glasgow",
+        "zxy": [
+          14,
+          7998,
+          5112
+        ],
+        "layer_features": {
+          "building": 30,
+          "housenumber": 219,
+          "landcover": 148,
+          "landuse": 38,
+          "mountain_peak": 7,
+          "park": 1,
+          "place": 47,
+          "poi": 2062,
+          "transportation": 328,
+          "transportation_name": 227,
+          "water": 19,
+          "water_name": 7,
+          "waterway": 8
+        }
+      },
+      {
+        "city": "Edinburgh",
+        "zxy": [
+          14,
+          8046,
+          5105
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 93,
+          "housenumber": 704,
+          "landcover": 1235,
+          "landuse": 57,
+          "mountain_peak": 14,
+          "park": 6,
+          "place": 50,
+          "poi": 7894,
+          "transportation": 426,
+          "transportation_name": 385,
+          "water": 4,
+          "water_name": 5
+        }
+      },
+      {
+        "city": "Aberdeen",
+        "zxy": [
+          14,
+          8096,
+          5006
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 18,
+          "housenumber": 710,
+          "landcover": 308,
+          "landuse": 66,
+          "mountain_peak": 3,
+          "place": 25,
+          "poi": 2828,
+          "transportation": 364,
+          "transportation_name": 241,
+          "water": 1,
+          "water_name": 8,
+          "waterway": 1
+        }
+      },
+      {
+        "city": "Inverness",
+        "zxy": [
+          14,
+          7999,
+          4979
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 6,
+          "housenumber": 205,
+          "landcover": 83,
+          "landuse": 30,
+          "mountain_peak": 1,
+          "place": 18,
+          "poi": 1161,
+          "transportation": 173,
+          "transportation_name": 199,
+          "water": 1,
+          "water_name": 4,
+          "waterway": 2
+        }
+      },
+      {
+        "city": "Dundee",
+        "zxy": [
+          14,
+          8056,
+          5064
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 13,
+          "housenumber": 216,
+          "landcover": 190,
+          "landuse": 26,
+          "park": 3,
+          "place": 18,
+          "poi": 1843,
+          "transportation": 364,
+          "transportation_name": 177,
+          "water": 9,
+          "water_name": 6
+        }
+      },
+      {
+        "city": "Dumfries",
+        "zxy": [
+          14,
+          8027,
+          5176
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 4,
+          "housenumber": 128,
+          "landcover": 50,
+          "landuse": 27,
+          "park": 1,
+          "place": 20,
+          "poi": 647,
+          "transportation": 178,
+          "transportation_name": 150,
+          "water": 3,
+          "water_name": 1,
+          "waterway": 3
+        }
+      }
+    ],
+    "Wales": [
+      {
+        "city": "Cardiff",
+        "zxy": [
+          14,
+          8047,
+          5449
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 31,
+          "housenumber": 346,
+          "landcover": 458,
+          "landuse": 167,
+          "park": 1,
+          "place": 25,
+          "poi": 3736,
+          "transportation": 378,
+          "transportation_name": 276,
+          "water": 13,
+          "water_name": 2,
+          "waterway": 22
+        }
+      },
+      {
+        "city": "Swansea",
+        "zxy": [
+          14,
+          8012,
+          5439
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 43,
+          "housenumber": 354,
+          "landcover": 177,
+          "landuse": 49,
+          "park": 1,
+          "place": 23,
+          "poi": 1196,
+          "transportation": 410,
+          "transportation_name": 296,
+          "water": 3,
+          "water_name": 6,
+          "waterway": 6
+        }
+      },
+      {
+        "city": "Wrexham",
+        "zxy": [
+          14,
+          8055,
+          5333
+        ],
+        "layer_features": {
+          "aeroway": 1,
+          "boundary": 1,
+          "building": 5,
+          "housenumber": 127,
+          "landcover": 373,
+          "landuse": 66,
+          "place": 27,
+          "poi": 1029,
+          "transportation": 362,
+          "transportation_name": 238,
+          "water": 4,
+          "water_name": 4,
+          "waterway": 26
+        }
+      },
+      {
+        "city": "Bangor",
+        "zxy": [
+          14,
+          8004,
+          5319
+        ],
+        "layer_features": {
+          "boundary": 2,
+          "building": 4,
+          "housenumber": 165,
+          "landcover": 182,
+          "landuse": 23,
+          "mountain_peak": 4,
+          "park": 1,
+          "place": 11,
+          "poi": 576,
+          "transportation": 101,
+          "transportation_name": 117,
+          "water": 7,
+          "water_name": 3,
+          "waterway": 11
+        }
+      },
+      {
+        "city": "Aberystwyth",
+        "zxy": [
+          14,
+          8006,
+          5381
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 9,
+          "housenumber": 76,
+          "landcover": 106,
+          "landuse": 43,
+          "mountain_peak": 2,
+          "place": 6,
+          "poi": 918,
+          "transportation": 300,
+          "transportation_name": 157,
+          "water": 9,
+          "water_name": 2,
+          "waterway": 8
+        }
+      }
+    ],
+    "Northern Ireland": [
+      {
+        "city": "Belfast",
+        "zxy": [
+          14,
+          7922,
+          5214
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 109,
+          "housenumber": 302,
+          "landcover": 134,
+          "landuse": 44,
+          "place": 37,
+          "poi": 2322,
+          "transportation": 306,
+          "transportation_name": 250,
+          "water": 5,
+          "water_name": 6,
+          "waterway": 4
+        }
+      },
+      {
+        "city": "Derry/Londonderry",
+        "zxy": [
+          14,
+          7858,
+          5182
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 12,
+          "housenumber": 70,
+          "landcover": 208,
+          "landuse": 56,
+          "place": 12,
+          "poi": 718,
+          "transportation": 282,
+          "transportation_name": 205,
+          "water": 2,
+          "water_name": 3,
+          "waterway": 2
+        }
+      },
+      {
+        "city": "Newry",
+        "zxy": [
+          14,
+          7903,
+          5246
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 49,
+          "housenumber": 156,
+          "landcover": 186,
+          "landuse": 81,
+          "park": 2,
+          "place": 8,
+          "poi": 1319,
+          "transportation": 139,
+          "transportation_name": 153,
+          "water": 11,
+          "water_name": 9,
+          "waterway": 22
+        }
+      },
+      {
+        "city": "Omagh",
+        "zxy": [
+          14,
+          7859,
+          5214
+        ],
+        "layer_features": {
+          "boundary": 1,
+          "building": 3,
+          "housenumber": 11,
+          "landcover": 15,
+          "landuse": 25,
+          "place": 1,
+          "poi": 209,
+          "transportation": 58,
+          "transportation_name": 70
+        }
+      },
+      {
+        "city": "Enniskillen",
+        "zxy": [
+          14,
+          7844,
+          5233
+        ],
+        "layer_features": {
+          "aeroway": 1,
+          "boundary": 1,
+          "building": 3,
+          "housenumber": 41,
+          "landcover": 68,
+          "landuse": 54,
+          "park": 1,
+          "place": 2,
+          "poi": 475,
+          "transportation": 234,
+          "transportation_name": 110,
+          "water": 4,
+          "water_name": 6,
+          "waterway": 34
+        }
+      }
+    ]
+  },
+  "addressed_tiles_checked": 957592,
+  "physical_contents_checked": 221293,
+  "tile_entries_checked": 252138,
+  "directory_blocks_checked": 63,
+  "features_in_physical_contents": 27016773
+}

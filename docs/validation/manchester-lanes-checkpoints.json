@@ -1,0 +1,123 @@
+{
+  "description": "Greater Manchester lane-guidance checkpoints. Expected values are the owner's recorded reports (app repo CLAUDE.md), to be checked against our lane data; they are not ground truth. Coordinates were located only from OSM-derived sources: the published lane squares' own way names/refs/geometry, Nominatim (search/lookup/reverse, 1 request per second, descriptive User-Agent) and small read-only bounding-box reads of the OpenStreetMap API (api.openstreetmap.org/api/0.6/map.json) for nodes and untagged-lane slip roads absent from the lane files. No proprietary source was used or stored.",
+  "located_on": "2026-10-10",
+  "heading_convention": "compass degrees of travel, taken from the local bearing of the OSM way the checkpoint lies on",
+  "checkpoints": [
+    {
+      "name": "1 Brinksway lights approach (A560 eastbound towards Hollywood Way / M60 J1)",
+      "lat": 53.406701,
+      "lon": -2.174396,
+      "heading": 44,
+      "expected_way_ids": [
+        2246322
+      ],
+      "expected_lanes": 2,
+      "expected_arrows": [
+        "straight",
+        "right"
+      ],
+      "owner_report": "Brinksway traffic lights approach: 2 lanes [straight | right]",
+      "located_by": [
+        "Nominatim search q='Brinksway, Stockport' -> ways 4451087, 566764807, 1291544525 ... (A560 Brinksway, SK3)",
+        "Lane square lanes-106_-5.json: eastbound one-way Brinksway ways 954199037 -> 2246322 -> 1291544924 (lanes=2), splitting at 53.40691,-2.17397",
+        "OSM API map bbox -2.1770,53.4055,-2.1720,53.4085: traffic_signals nodes 1428486877 (on straight-on way 954199038) and 9735283875 (on primary_link 954026108 to Hollywood Way northbound) just after that split",
+        "Point placed 20 m before the end of way 2246322 along its geometry (bearing 44)"
+      ],
+      "uncertainty": "The report does not say which arm; the eastbound 2-lane approach to the signals nearest the M60 J1 side was chosen. OSM topology there splits into a left primary_link (towards Hollywood Way / Pyramid Roundabout) and straight-on Brinksway, which reads like [left | straight] rather than [straight | right]; a human should confirm the arm."
+    },
+    {
+      "name": "2 Pyramid Roundabout approach, M60 J1 (A560 Hollywood Way northbound)",
+      "lat": 53.408165,
+      "lon": -2.174406,
+      "heading": 350,
+      "expected_way_ids": [
+        954327639
+      ],
+      "expected_lanes": 4,
+      "owner_report": "Pyramid roundabout M60 J1: approach 4 lanes, the 2 left lanes to the M60",
+      "located_by": [
+        "Nominatim search q='Pyramid Roundabout, Stockport' -> circulatory ways 979559022, 4246288, 979559023, 979559016 and motorway_junction node 1678172459",
+        "Nominatim lookup N1678172459 namedetails: ref=1, name=Pyramid Roundabout (M60 J1)",
+        "Lane square: Hollywood Way northbound way 954327639 (lanes=4) feeds the roundabout; motorway_link 1059611956 (lanes=2) leaves on its left towards the M60 westbound slip",
+        "Point placed 25 m before the end of way 954327639 (bearing 350)"
+      ],
+      "uncertainty": "'2 left lanes to the M60' is not an arrow pattern, so only the lane count is checked."
+    },
+    {
+      "name": "3 M60 J4 westbound before the M56 split",
+      "lat": 53.399018,
+      "lon": -2.223984,
+      "heading": 257,
+      "expected_way_ids": [
+        30631502
+      ],
+      "expected_lanes": 5,
+      "owner_report": "M60 J4 before the split: 5 lanes (stay in lanes 2-3); the M56 split takes the 2 left of 5",
+      "located_by": [
+        "Nominatim search q='Gatley Interchange' / 'Kingsway Interchange' -> motorway_junction nodes 234966, 15316374, 334001, 334538",
+        "Nominatim lookup N15316374 namedetails: ref=4 (Kingsway Interchange) at 53.39852,-2.22843",
+        "Lane square: M60 westbound way 30631502 (lanes=4) ends at 53.39852,-2.22843 where M56 way 4966822 (lanes=2, destination Chester;Warrington;Birmingham) and M60 way 979363523 (lanes=3) begin",
+        "Point placed 300 m before the split along way 30631502 (bearing 257)"
+      ],
+      "uncertainty": "Direction inferred: the M56 only leaves on the left for westbound (clockwise) M60 traffic here."
+    },
+    {
+      "name": "4 M56 J2 Sharston exit slip approach to the roundabout",
+      "lat": 53.39596,
+      "lon": -2.25555,
+      "heading": 293,
+      "expected_way_ids": [
+        4966832
+      ],
+      "expected_lanes": 2,
+      "expected_arrows": [
+        "right",
+        "right"
+      ],
+      "owner_report": "M56 J2 Sharston approach: 2 lanes, both right",
+      "located_by": [
+        "Nominatim search q='Sharston Interchange' -> motorway_junction node 234955 and circulatory ways 4085763, 206173254, 978856150",
+        "Nominatim lookup N234955 namedetails: ref=2, name=Sharston Interchange",
+        "OSM API map bbox -2.2620,53.3940,-2.2480,53.3990: westbound exit slip way 4966832 (motorway_link, destination Altrincham;Wythenshawe;Liverpool;Bolton, no lanes tags) runs from node 234955 to the signalled roundabout entry at 53.39617,-2.25670",
+        "Point placed on way 4966832 between nodes at 53.39594,-2.25542 and 53.39600,-2.25565 (bearing 293), about 80 m before the stop line"
+      ],
+      "uncertainty": "'Approach' was read as the exit slip approaching the roundabout (where 'both right' makes sense). The other reading, the M56 mainline (Sharston Link, way 482908022, lanes=2) approaching J2, would give a 2-lane count match but still no arrows."
+    },
+    {
+      "name": "5 M60 J2 eastbound (anticlockwise) before the A560 exit",
+      "lat": 53.400757,
+      "lon": -2.215797,
+      "heading": 67,
+      "expected_way_ids": [
+        135848914
+      ],
+      "expected_lanes": 4,
+      "owner_report": "M60 J2: 4 lanes, left lanes exit",
+      "located_by": [
+        "Nominatim search q='Roscoe's Spur' -> ways 216793376, 4967722, 4972900 (motorway, ref M60) linking the M60 to Roscoe's Roundabout (A560)",
+        "Lane square: M60 eastbound way 135848914 (lanes=4) ends at 53.40111,-2.21441 where motorway_link 1560300318 (lanes=2, destination Cheadle, destination:ref A560) leaves left and M60 way 135848913 (lanes=3) continues",
+        "Point placed 100 m before that split along way 135848914 (bearing 67)"
+      ],
+      "uncertainty": "No motorway_junction node with ref=2 was returned by Nominatim; J2 was identified as the A560 (Roscoe's Spur) junction between J1 (Pyramid, ref 1) and J3 (Kingsway, ref 3). Only the eastbound direction has a left exit here."
+    },
+    {
+      "name": "6 Roscoe's Roundabout exit into Carrs Road",
+      "lat": 53.39758,
+      "lon": -2.19982,
+      "heading": 190,
+      "expected_way_ids": [
+        4953964
+      ],
+      "expected_lanes": 1,
+      "owner_report": "Roscoe's roundabout -> Carrs Road: a separate left exit lane about 130 m after the roundabout",
+      "located_by": [
+        "Nominatim search q='Roscoe's Roundabout' -> circulatory ways 229687265, 566783175, 229687258, 953769394 ... (A560)",
+        "Nominatim search q='Carrs Road, Cheadle' -> ways 4953963, 4953965",
+        "OSM API map bbox -2.2030,53.3960,-2.1950,53.3995: one-way way 4953964 (Carrs Road) leaves the roundabout's south-east side at 53.39764,-2.19980; Carrs Road has no lanes tags",
+        "Point placed on way 4953964 (bearing 190)"
+      ],
+      "uncertainty": "In OSM, Carrs Road leaves directly from the roundabout; no Carrs Road connection was found about 130 m beyond it along Stockport Road. Expected 1 lane is our reading of 'a separate exit lane'. A human should confirm where the reported lane is."
+    }
+  ],
+  "expected_way_ids_note": "expected_way_ids is the OSM way the checkpoint lies on; a match on any other way is reported as a way MISMATCH."
+}

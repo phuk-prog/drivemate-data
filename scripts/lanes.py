@@ -7,11 +7,16 @@ import json
 import os
 import sys
 
+from grid_tiles import tiles_for_polyline
+
 KEEP = [
     "lanes", "lanes:forward", "lanes:backward",
     "turn:lanes", "turn:lanes:forward", "turn:lanes:backward",
     "oneway", "junction", "maxspeed", "ref", "name", "highway",
     "destination", "destination:ref", "destination:lanes",
+    # Bus lanes, so the app can mark them and never advise them.
+    "bus:lanes", "bus:lanes:forward", "bus:lanes:backward",
+    "psv:lanes", "psv:lanes:forward", "psv:lanes:backward",
 ]
 
 src, dst = sys.argv[1], sys.argv[2]
@@ -39,7 +44,7 @@ with open(src, encoding="utf-8") as f:
             "g": [[round(c[0], 5), round(c[1], 5)] for c in coords],
         })
 
-SOURCE = "© OpenStreetMap contributors (ODbL)"
+SOURCE = "© OpenStreetMap contributors, ODbL 1.0 https://opendatacommons.org/licenses/odbl/1-0/"
 
 if dst.endswith(".json"):
     with open(dst, "w", encoding="utf-8") as f:
@@ -47,11 +52,10 @@ if dst.endswith(".json"):
 else:
     # Split into squares of half a degree (about 55 x 35 km), so the app only fetches the
     # squares along your route: lanes-<row>_<col>.json, row = floor(lat*2), col = floor(lon*2).
-    import math
     os.makedirs(dst, exist_ok=True)
     squares = {}
     for w in ways:
-        keys = {(math.floor(c[1] * 2), math.floor(c[0] * 2)) for c in w["g"]}
+        keys = tiles_for_polyline(w["g"], 2)
         for k in keys:
             squares.setdefault(k, []).append(w)
     for (row, col), items in squares.items():
