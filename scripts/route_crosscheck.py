@@ -28,6 +28,7 @@ import json
 import math
 from pathlib import Path
 import random
+import re
 import sys
 import tempfile
 import urllib.error
@@ -38,6 +39,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import restriction_acceptance as ra  # noqa: E402
 
 SCHEMA = 1
+GEOMETRY_TOLERANCE_METRES = ra.SHAPE_TOLERANCE_METRES  # route shape vs indexed node/edge
+GRID = 2000  # node grid cells of ~55 m
 DEFAULT_SEED = 20261010
 DEFAULT_RATIO = 1.25
 # Greater Manchester (approximate county bounds): south, west, north, east.
@@ -109,6 +112,8 @@ class Segment:
     # Node-pair routes only: (way, directions) for every way holding this pair as two consecutive
     # nodes. ``directions`` are FORWARD/BACKWARD: how the way's node order is walked start -> end.
     candidates: tuple = ()
+    # A ferry crossing: not a road, so no road check applies to it (and it never counts as unmapped).
+    ferry: bool = False
 
 
 @dataclass
@@ -196,8 +201,15 @@ class Restriction:
 class OsmIndex:
     """Highway ways, node coordinates, node-pair to way lookup and selected restrictions."""
 
-    def __init__(self, ways, relations, coords, rewritten=frozenset()):
+    def __init__(self, ways, relations, coords, rewritten=frozenset(), ferries=()):
         self.ways, self.coords = ways, coords
+        self._grid = None
+        # (u, v) node pairs of route=ferry ways (both orders): skipped by the checks, never flagged.
+        self.ferry_edges = set()
+        for nodes in ferries:
+            for u, v in zip(nodes, nodes[1:]):
+                if u != v:
+                    self.ferry_edges.update(((u, v), (v, u)))
         # (restriction, relation id) pairs restriction_rewrite.py turned into enforced no_* relations.
         self.rewritten = frozenset(rewritten)
         self.pairs = {}
@@ -245,6 +257,30 @@ class OsmIndex:
         kind = tags["restriction"]
         return Restriction(ident, kind, from_way, via, to_way, self.coords[via], headings,
                            kind in ra.ENGINE_UNSUPPORTED and (kind, ident) not in self.rewritten)
+
+    def neighbours(self, node):
+        """Nodes joined to ``node`` by a road or ferry edge (either order)."""
+        if getattr(self, "_adj", None) is None:
+            self._adj = {}
+            for u, v in list(self.edges) + list(self.ferry_edges):
+                self._adj.setdefault(u, set()).add(v)
+        return self._adj.get(node, ())
+
+    def nodes_near(self, point, metres=GEOMETRY_TOLERANCE_METRES):
+        """Indexed node IDs within ``metres`` of ``point``, nearest first."""
+        if self._grid is None:
+            self._grid = {}
+            for n, c in self.coords.items():
+                self._grid.setdefault((int(c[0] * GRID), int(c[1] * GRID)), []).append(n)
+        cy, cx = int(point[0] * GRID), int(point[1] * GRID)
+        found = []
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                for n in self._grid.get((cy + dy, cx + dx), ()):
+                    d = ra.haversine(self.coords[n], point)
+                    if d <= metres:
+                        found.append((d, n))
+        return [n for _, n in sorted(found)]
 
     def way_for_pair(self, u, v):
         return self.pairs.get((min(u, v), max(u, v)))
@@ -301,16 +337,34 @@ def _position(points, p, tolerance=15.0):
     return best_pos if best is not None and best <= tolerance else None
 
 
+def read_ferries(opl):
+    """Node lists of route=ferry ways (they carry no highway tag, so the road loader skips them)."""
+    out = []
+    with open(opl, "rt", encoding="utf-8") as handle:
+        for line in handle:
+            if line.startswith("w") and "route=ferry" in line:
+                fields = line.split()
+                tags = next((f[1:] for f in fields[1:] if f.startswith("T")), "")
+                refs = next((f[1:] for f in fields[1:] if f.startswith("N")), "")
+                if "route=ferry" not in tags.split(","):
+                    continue
+                nodes = [int(m) for m in re.findall(r"n(\d+)", refs)]
+                if len(nodes) >= 2:
+                    out.append(nodes)
+    return out
+
+
 def load_index(opl, rewritten=frozenset()):
     ways, relations = ra.read_opl(opl)
-    wanted = {n for _, nodes in ways.values() for n in nodes}
-    return OsmIndex(ways, relations, ra.read_node_coords(opl, wanted), rewritten)
+    ferries = read_ferries(opl)
+    wanted = {n for _, nodes in ways.values() for n in nodes} | {n for f in ferries for n in f}
+    return OsmIndex(ways, relations, ra.read_node_coords(opl, wanted), rewritten, ferries)
 
 
 # --------------------------------------------------------------------------- engines
 
 class OsrmRouter(Router):
-    """Local osrm-routed HTTP API; ``annotations=nodes`` gives OSM node IDs mapped to ways."""
+    """Local osrm-routed HTTP API; the route is decoded by its geometry (node annotations are hints)."""
     name = "osrm"
 
     def __init__(self, base_url, index, timeout=30):
@@ -332,7 +386,8 @@ class OsrmRouter(Router):
 
     def route(self, origin, destination):
         self.last_reason = None
-        query = urllib.parse.urlencode({"overview": "false", "steps": "false", "annotations": "nodes"})
+        query = urllib.parse.urlencode({"overview": "full", "geometries": "geojson",
+                                        "steps": "false", "annotations": "nodes"})
         data = self._get(f"/route/v1/driving/{origin[1]:.6f},{origin[0]:.6f};"
                          f"{destination[1]:.6f},{destination[0]:.6f}?{query}")
         if data.get("code") in ("NoRoute", "NoSegment"):
@@ -341,13 +396,65 @@ class OsrmRouter(Router):
         if data.get("code") != "Ok":
             raise RuntimeError(f"OSRM error: {data.get('code')} {data.get('message', '')}"[:200])
         best = data["routes"][0]
-        nodes = []
+        hints = []
         for leg in best["legs"]:
             for n in leg.get("annotation", {}).get("nodes", []):
-                if not nodes or nodes[-1] != n:
-                    nodes.append(n)
-        segments = segments_from_nodes(nodes, self.index)
-        return Route(best["distance"], best["duration"], segments, node_list_problem(nodes, segments))
+                if not hints or hints[-1] != n:
+                    hints.append(n)
+        coords = (best.get("geometry") or {}).get("coordinates")
+        if coords:  # decode by the route's own shape; the node annotations are only hints
+            nodes, problem = nodes_from_geometry([(lat, lon) for lon, lat in coords], self.index, set(hints))
+            segments = segments_from_nodes(nodes, self.index)
+            return Route(best["distance"], best["duration"], segments,
+                         problem or node_list_problem(nodes, segments))
+        segments = segments_from_nodes(hints, self.index)  # no geometry returned: annotation list only
+        return Route(best["distance"], best["duration"], segments, node_list_problem(hints, segments))
+
+
+def _on_edge(index, a, b, point):
+    return _position([index.coords[a], index.coords[b]], point, GEOMETRY_TOLERANCE_METRES) is not None
+
+
+def nodes_from_geometry(points, index, hints=frozenset()):
+    """Walk a route polyline (lat, lon) over the indexed edges: (node path, problem or None).
+
+    Every interior vertex must sit (within GEOMETRY_TOLERANCE_METRES, the 1.5 m of the restriction
+    acceptance shape check) on an indexed node that continues the path along a real edge (road or
+    ferry). The first and last vertex may lie part-way along an edge: the edge's far node is used.
+    Node annotations only break ties between nodes at the same spot. Anything else (a vertex off
+    the index, a missing edge) returns a problem: the route is then unverifiable, never guessed.
+    """
+    pts = [p for i, p in enumerate(points) if i == 0 or p != points[i - 1]]
+    if len(pts) < 2:
+        return [], "route geometry has fewer than two points"
+    cands = [index.nodes_near(p) for p in pts]
+    path = []
+    for i, found in enumerate(cands):
+        if not found:
+            if i in (0, len(pts) - 1):
+                path.append(None)
+                continue
+            return [], f"route vertex {i} of {len(pts)} is not on an indexed node"
+        found = sorted(found, key=lambda n: n not in hints)
+        if path and path[-1] is not None:
+            linked = [n for n in found if (path[-1], n) in index.edges or (path[-1], n) in index.ferry_edges]
+            if not linked:
+                return [], f"route vertex {i} of {len(pts)} is not joined to the previous one by an indexed edge"
+            found = linked
+        path.append(found[0])
+    if path[0] is None:  # starts part-way along an edge: use that edge's start node
+        first = path[1] if len(path) > 1 else None
+        start = next((a for a in index.neighbours(first) if _on_edge(index, a, first, pts[0])), None) if first else None
+        if start is None:
+            return [], "route start is not on an indexed edge"
+        path[0] = start
+    if path[-1] is None:  # ends part-way along an edge: use that edge's end node
+        last = path[-2]
+        end = next((b for b in index.neighbours(last) if _on_edge(index, last, b, pts[-1])), None)
+        if end is None:
+            return [], "route end is not on an indexed edge"
+        path[-1] = end
+    return [n for i, n in enumerate(path) if i == 0 or n != path[i - 1]], None
 
 
 def segments_from_nodes(nodes, index):
@@ -364,6 +471,10 @@ def segments_from_nodes(nodes, index):
         heading = ra.bearing(a, b) if a and b and a != b else None
         found = index.edge_ways(u, v)
         way_id, candidates = None, ()
+        if not found and (u, v) in index.ferry_edges:
+            segments.append(Segment(None, a, b, heading, heading, u, v, (), True))
+            previous = None
+            continue
         if found:
             candidates = tuple((w, frozenset(d)) for w, d in found.items())
             way_id = previous if previous in found else candidates[0][0]
@@ -382,7 +493,7 @@ def node_list_problem(nodes, segments):
     and restriction judgements on it are tool artefacts. A path that returns to the node it came
     from is also not something a route can do.
     """
-    unmapped = sum(1 for s in segments if s.way_id is None)
+    unmapped = sum(1 for s in segments if s.way_id is None and not s.ferry)
     if unmapped:
         return f"{unmapped} of {len(segments)} node pairs are not edges of an indexed way"
     clean = [n for i, n in enumerate(nodes) if i == 0 or n != nodes[i - 1]]
@@ -520,7 +631,7 @@ def oneway_violations(route, index):
 
 def _usable(seg):
     """Both ends known and not an unmapped (non-edge) node pair."""
-    if seg.start is None or seg.end is None:
+    if seg.start is None or seg.end is None or seg.ferry:
         return False
     return not (seg.way_id is None and seg.start_node is not None)
 
@@ -724,7 +835,7 @@ def markdown(report, top=25):
     lines += ["| Engine result | Journeys |", "|---|---:|"]
     lines += [f"| {k} | {v:,} |" for k, v in report["engine_status"].items()]
     for engine, n in (report.get("unverifiable_routes") or {}).items():
-        lines += ["", f"{engine}: **{n:,}** routes unverifiable (node list is not a clean path); "
+        lines += ["", f"{engine}: **{n:,}** routes unverifiable (route geometry could not be matched to the indexed roads with confidence); "
                       "restriction, one-way and U-turn checks skipped for them, not passed."]
     lines += ["", "| Flag (engine) | Count |", "|---|---:|"]
     lines += [f"| {k} | {v:,} |" for k, v in report["flag_counts"].items()] or ["| none | 0 |"]

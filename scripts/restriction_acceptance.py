@@ -639,7 +639,7 @@ def read_node_coords(path, wanted):
 def pbf_to_opl(pbf, opl):
     """Highway ways, restriction relations and their referenced nodes (osmium-tool or pyosmium)."""
     if shutil.which("osmium"):
-        subprocess.run(["osmium", "tags-filter", str(pbf), "w/highway", "r/type=restriction",
+        subprocess.run(["osmium", "tags-filter", str(pbf), "w/highway", "w/route=ferry", "r/type=restriction",
                         "-f", "opl,add_metadata=false", "-o", str(opl), "--overwrite"], check=True)
         return
     import osmium  # pyosmium fallback: writes the whole extract as OPL

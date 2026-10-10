@@ -372,6 +372,75 @@ class OsrmUnverifiable(unittest.TestCase):
         self.assertIn("unverifiable", rc.markdown(report))
 
 
+class OsrmGeometryDecoding(unittest.TestCase):
+    """OSRM routes are decoded by their geometry; node annotations are only hints."""
+
+    def osrm(self, idx, points, nodes=()):
+        coords = [[lon, lat] for lat, lon in points]
+        body = json.dumps({"code": "Ok", "routes": [{"distance": 250.0, "duration": 30.0,
+                                                     "geometry": {"type": "LineString", "coordinates": coords},
+                                                     "legs": [{"annotation": {"nodes": list(nodes)}}]}]}).encode()
+        with mock.patch.object(rc.urllib.request, "urlopen", return_value=io.BytesIO(body)) as call:
+            route = rc.OsrmRouter("http://osrm", idx).route((53.479, -2.24), (53.48, -2.2385))
+        self.assertIn("overview=full", call.call_args[0][0])
+        self.assertIn("geometries=geojson", call.call_args[0][0])
+        return route
+
+    def test_junction_by_geometry_ignores_garbage_annotations(self):
+        idx = index()
+        route = self.osrm(idx, [COORDS[1], COORDS[2], COORDS[3]], nodes=[7, 1, 99, 3, 2])
+        self.assertIsNone(route.unverifiable)
+        self.assertEqual(route.way_sequence(), [SOUTH, EAST])
+        self.assertEqual(rc.compare(JOURNEY, {"osrm": route}, {}, {}, idx, 1.25)["flags"], [])
+
+    def test_route_starting_and_ending_mid_edge(self):
+        mid = lambda a, b: ((COORDS[a][0] + COORDS[b][0]) / 2, (COORDS[a][1] + COORDS[b][1]) / 2)
+        route = self.osrm(index(), [mid(1, 2), COORDS[2], mid(2, 3)])
+        self.assertIsNone(route.unverifiable)
+        self.assertEqual(route.way_sequence(), [SOUTH, EAST])
+
+    def test_roundabout(self):
+        ring = {21: (53.4800, -2.2400), 22: (53.4801, -2.2399), 23: (53.4800, -2.2398), 24: (53.4799, -2.2399)}
+        lines = [way(30, [21, 22, 23, 24, 21], junction="roundabout", oneway="yes"),
+                 way(31, [20, 21]), way(32, [23, 25])]
+        coords = {**ring, 20: (53.4800, -2.2410), 25: (53.4800, -2.2390)}
+        idx = rc.OsmIndex(ra.load_ways(lines), [], coords)
+        # clockwise (UK-style) half way round, then off: 20 -> 21 -> 24 is anticlockwise, so use 21 -> 22 -> 23
+        route = self.osrm(idx, [coords[n] for n in (20, 21, 22, 23, 25)])
+        self.assertIsNone(route.unverifiable)
+        self.assertEqual(route.way_sequence(), [31, 30, 32])
+        self.assertEqual(rc.oneway_violations(route, idx), [])
+        wrong = self.osrm(idx, [coords[n] for n in (20, 21, 24, 23, 25)])  # the wrong way round
+        self.assertEqual([v["way"] for v in rc.oneway_violations(wrong, idx)], [30])
+
+    def test_one_way_against_is_flagged_with_geometry(self):
+        idx = index(north_tags={"oneway": "-1"})
+        route = self.osrm(idx, [COORDS[1], COORDS[2], COORDS[4]])
+        self.assertIsNone(route.unverifiable)
+        flags = rc.compare(JOURNEY, {"osrm": route}, {}, {}, idx, 1.25)["flags"]
+        self.assertEqual([f["type"] for f in flags], ["oneway_violation"])
+
+    def test_geometry_leaving_the_index_is_unverifiable(self):
+        idx = index(north_tags={"oneway": "-1"})
+        route = self.osrm(idx, [COORDS[1], COORDS[2], (53.4805, -2.2300), COORDS[4]])
+        self.assertIn("not on an indexed node", route.unverifiable)
+        result = rc.compare(JOURNEY, {"osrm": route}, {}, {}, idx, 1.25)
+        self.assertEqual(result["flags"], [])
+        self.assertIn("unverifiable", result["engines"]["osrm"])
+
+    def test_missing_edge_between_indexed_nodes_is_unverifiable(self):
+        route = self.osrm(index(), [COORDS[3], COORDS[5]])  # both indexed, but no edge joins them
+        self.assertIn("not joined", route.unverifiable)
+
+    def test_ferry_is_skipped_not_flagged(self):
+        coords = {**COORDS, 40: (53.4800, -2.2370)}
+        idx = rc.OsmIndex(ra.load_ways([way(SOUTH, [1, 2]), way(EAST, [2, 3])]), [], coords, ferries=[[3, 40]])
+        route = self.osrm(idx, [COORDS[1], COORDS[2], COORDS[3], coords[40]])
+        self.assertIsNone(route.unverifiable)
+        self.assertTrue(route.segments[-1].ferry)
+        self.assertEqual(rc.compare(JOURNEY, {"osrm": route}, {}, {}, idx, 1.25)["flags"], [])
+
+
 class Workflow(unittest.TestCase):
     def test_workflow_contract(self):
         wf = yaml.safe_load((ROOT / ".github/workflows/route-crosscheck.yml").read_text())
