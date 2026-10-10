@@ -9,6 +9,7 @@ on:
     branches: [codex/architecture-foundation]
     paths:
       - scripts/osm_gap_report.py
+      - scripts/lane_coverage.py
       - tests/test_osm_gap_report.py
       - docs/validation/osm-gap-report.md
       - .github/workflows/manchester-gaps.yml
@@ -62,6 +63,13 @@ jobs:
             || echo "Gap report could not be produced (informational only)" >> "$GITHUB_STEP_SUMMARY"
           exit 0
 
+      - name: Lane guidance coverage at motorway exits (informational)
+        run: |
+          set -uo pipefail
+          python3 scripts/lane_coverage.py --pbf work/base.osm.pbf --json work/lane-coverage.json \
+            --summary "$GITHUB_STEP_SUMMARY" || echo "Lane coverage could not be produced" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
       - name: Retain gap report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -72,5 +80,6 @@ jobs:
           path: |
             work/osm-gaps.json
             work/osm-gaps.md
+            work/lane-coverage.json
             work/source.sha256
             work/source-retrieved.txt
