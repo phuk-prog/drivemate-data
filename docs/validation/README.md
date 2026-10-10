@@ -15,6 +15,7 @@ The working tree began at data `50906eb3e82d42b938425f6f1f83aa3a319718b8`.
   4,523,868 records in valid archives were checked. Six additional archives fail
   the UK coordinate envelope; the detailed report lists them. Eight blocking
   core-city gaps concern missing limits/roadinfo. This audit does **not** pass.
+- The complete PMTiles scan validates 957,592 addressed tiles, 252,138 directory entries, 221,293 physical payloads and 27,016,773 features for gzip/MVT layer/tag structure; 23 UK city samples contain road layers. This is format integrity, not geometry truth.
 - Four z14 PMTiles samples decode with transportation, building and housenumber
   features using pmtiles 3.4.1 and mapbox-vector-tile 2.2.0. This checks samples and
   schema availability, not all geometry, actual entrances or verified addresses.
@@ -74,3 +75,5 @@ non-UK land; precise territorial validation remains outstanding. Full rebuilt
 map/search/graph verification, feature provenance/rights and Android UK execution
 are still required. Validation-only builds omit unreviewed Mapillary observations;
 they must not be labelled as validation of the imagery-enhanced live pipeline.
+
+Repeat the complete format/UK-sample gate with `python scripts/verify_pmtiles.py drivemate.pmtiles pmtiles-validation.json --uk-samples`. The full-build workflow records this report and binds its hash/size to the final asset snapshot; stale scan reports cannot validate changed map bytes.

@@ -74,6 +74,24 @@ class PublicationIdentityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Symlink"):
             module.verify_snapshot(self.directory, report)
 
+    def test_payload_scan_is_bound_to_the_final_map_bytes(self):
+        report = self.report()
+        identity = report['asset_snapshot']['files']['drivemate.pmtiles']
+        report['map_archive_validation'] = {**identity, 'errors': [],
+            'addressed_tiles_checked': 2, 'physical_contents_checked': 1, 'tile_entries_checked': 1}
+        module.verify_snapshot(self.directory, report)
+        report['map_archive_validation']['sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'different bytes'):
+            module.verify_snapshot(self.directory, report)
+
+    def test_missing_failed_or_empty_payload_proof_is_rejected(self):
+        snapshot = self.report()['asset_snapshot']
+        identity = snapshot['files']['drivemate.pmtiles']
+        for proof in (None, {**identity, 'errors': ['bad gzip']},
+                      {**identity, 'errors': [], 'addressed_tiles_checked': 0}):
+            with self.subTest(proof=proof), self.assertRaises(ValueError):
+                module.verify_map_archive_report(proof, snapshot)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -66,7 +66,21 @@ def verify_snapshot(directory, report):
     for name, item in entries.items():
         if actual["files"][name] != item:
             raise ValueError(f"Map asset differs from passed quality report: {name}")
+    if 'map_archive_validation' in report:
+        verify_map_archive_report(report['map_archive_validation'], actual)
     return actual
+
+
+def verify_map_archive_report(report, snapshot):
+    """A payload scan must describe the same map bytes as the final quality snapshot."""
+    expected = snapshot.get('files', {}).get('drivemate.pmtiles')
+    if (not isinstance(report, dict) or report.get('errors') != [] or expected is None or
+        report.get('sha256') != expected['sha256'] or report.get('bytes') != expected['bytes']):
+        raise ValueError('Map payload report missing, failing or bound to different bytes')
+    for key in ('addressed_tiles_checked', 'physical_contents_checked', 'tile_entries_checked'):
+        if type(report.get(key)) is not int or report[key] <= 0:
+            raise ValueError('Map payload report has no complete archive counts')
+    return report
 
 
 def read_report(filename):

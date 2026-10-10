@@ -6,7 +6,7 @@ import json
 import sys
 from coverage_audit import audit as audit_coverage
 from source_inventory import read as read_source_inventory
-from publication_consistency import snapshot_assets
+from publication_consistency import snapshot_assets, read_report, verify_map_archive_report
 
 out = Path(sys.argv[1])
 previous_path = Path(sys.argv[2]) if len(sys.argv) > 2 else None
@@ -118,14 +118,25 @@ for key in stable:
         elif ratio > 3.0:
             warnings.append(f"{key} grew to {ratio:.1f}x last build ({old:,} -> {new:,})")
 
+asset_snapshot = snapshot_assets(out)
+map_archive_validation = None
+if len(sys.argv) > 4:
+    try:
+        map_archive_validation = read_report(sys.argv[4])
+        verify_map_archive_report(map_archive_validation, asset_snapshot)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        errors.append(f"Map payload validation report invalid: {exc}")
+
 report = {
     "version": 1,
     "metrics": metrics,
     "nation_tile_probes": regional_coverage,
-    "asset_snapshot": snapshot_assets(out),
+    "asset_snapshot": asset_snapshot,
     "errors": errors,
     "warnings": warnings,
 }
+if map_archive_validation is not None:
+    report['map_archive_validation'] = map_archive_validation
 json_out.write_text(json.dumps(report, indent=2) + "\n")
 
 lines = ["## DriveMate weekly data quality", "", "| Metric | This build | Previous |", "|---|---:|---:|"]

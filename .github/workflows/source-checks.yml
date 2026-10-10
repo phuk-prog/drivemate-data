@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install generator test dependencies
-        run: python3 -m pip install shapely==2.2.0 pyproj==3.8.0 PyYAML==6.0.3
+        run: python3 -m pip install shapely==2.2.0 pyproj==3.8.0 PyYAML==6.0.3 pmtiles==3.4.1 mapbox-vector-tile==2.2.0
       - name: Run canonical data preflight
         run: python3 scripts/unified_preflight.py --repo . --base-sha HEAD
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

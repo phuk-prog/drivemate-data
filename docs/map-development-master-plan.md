@@ -56,3 +56,11 @@ No stage is marked completed on source tests alone. No production publication, A
 Full generated-data and independent legal/road correctness remain outstanding; stages 2–6 retain dependency holds.
 
 Current correction preflight target: 91 unit tests and five generator selftests. Validation-only full builds omit Mapillary observation acquisition/caches; source inventory records those sources absent. See `docs/source-rights-review.md` and `docs/validation/README.md` for exact inputs, findings and reproduction.
+
+## Full archive verification and consumer protection
+
+- `3e8c7a49848e03ab5f812afd9e61bd4920e21773` passed source CI https://github.com/phuk-prog/drivemate-data/actions/runs/38027879059 (91 tests and five selftests).
+- Nonpublishing UK build https://github.com/phuk-prog/drivemate-data/actions/runs/38027913632 started at that exact commit with `components=all`, `validate_only=true`; dependencies and runner capacity passed. Production publishers are gated off. Result pending; this run predates the added full-payload gate, whose actual published-archive evidence is recorded separately.
+- Repeatable complete PMTiles verifier: Implemented, Verified locally against the current map. All 957,592 addresses, 221,293 physical contents and 23 city road-layer samples pass format checks. New corruption regressions cover truncated gzip, invalid MVT tag indices, forged counts and a tiny archive claiming UK coverage. Payload reports are bound to the final map fingerprint.
+- Android offline map replacement: Testing. Consumer inspection found size/header-only replacement in `MapPack.kt`; checksum-before-rename protection is being tested on the existing Android branch without activating unfinished data. Local SDK/JDK setup and trusted session CA configuration were required; no TLS bypass or native dependency change. Existing graph protections remain unchanged.
+- Local OS Open Names binary download: Blocked by HTTP 403 on `omseprd1stdstordownload.blob.core.windows.net`; API metadata is available. Do not call this archive retrieved or verified locally. GitHub-runner retrieval remains to be observed.

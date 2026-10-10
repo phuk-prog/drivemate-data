@@ -65,7 +65,7 @@ jobs:
       - name: Validate dependencies and runner capacity before the UK build
         run: |
           set -euo pipefail
-          python3 -m pip install shapely==2.2.0 pyproj==3.8.0 PyYAML==6.0.3
+          python3 -m pip install shapely==2.2.0 pyproj==3.8.0 PyYAML==6.0.3 pmtiles==3.4.1 mapbox-vector-tile==2.2.0
           python3 scripts/unified_preflight.py --repo . --base-sha HEAD
           java -version
           osmium --version
@@ -111,6 +111,9 @@ jobs:
           echo "map_bytes=$(stat -c %s out/drivemate.pmtiles)" >> out/build-info.txt
           # A real UK map is hundreds of MB; a tiny file means the build failed.
           [ $(stat -c %s out/drivemate.pmtiles) -gt 50000000 ] || { echo "::error::Map file is too small - build failed"; exit 1; }
+
+      - name: Verify every generated map payload before producing navigation layers
+        run: python3 scripts/verify_pmtiles.py out/drivemate.pmtiles work/pmtiles-validation.json --uk-samples
 
       - name: Lane, junction and speed data (from OpenStreetMap), in squares
         run: |
@@ -361,7 +364,7 @@ jobs:
         run: |
           # Compare with the previous published build when its quality summary exists.
           gh release download "$TAG" -p build-quality.json -D work --clobber 2>/dev/null || true
-          python3 scripts/validate_build.py out work/build-quality.json out/build-quality.json
+          python3 scripts/validate_build.py out work/build-quality.json out/build-quality.json work/pmtiles-validation.json
           cat out/build-quality.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify publication rules
@@ -390,6 +393,7 @@ jobs:
             out/limit-checks.md
             work/topology/*-report.json
             work/restrictions/*-report.json
+            work/pmtiles-validation.json
             build/reports/unified-preflight.json
 
   # Whole-UK road graph for routes worked out on the phone with no signal (Valhalla Mobile 0.6.3
