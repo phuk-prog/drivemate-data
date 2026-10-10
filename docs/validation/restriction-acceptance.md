@@ -106,3 +106,27 @@ instead of failing every run. A permanently red check would hide any new,
 unexpected failure. Every other failing restriction still rejects the run.
 Fixing this needs either a Valhalla release that supports `only_u_turn` or an
 app-side guard; both are outstanding.
+
+## First full Greater Manchester run — 10 October 2026
+
+[Run 38044594966](https://github.com/phuk-prog/drivemate-data/actions/runs/38044594966)
+used the Geofabrik Greater Manchester extract (retrieved 10:21 UTC) and Valhalla 3.6.3.
+
+| Result | Relations |
+|---|---:|
+| Restriction relations found | 2,602 |
+| Tested | 1,993 |
+| Pass | 1,870 |
+| Fail | **1** |
+| Engine unsupported (`only_u_turn`) | 3 (r13442755, r13613008, r14121155) |
+| Inconclusive | 119 |
+| Skipped (mostly way-via: 316) | 609 |
+
+**The one failure:** [r14551046](https://www.openstreetmap.org/relation/14551046),
+`no_left_turn` from George Street (w210634704, one-way unclassified) via
+n10003180652 into w1092418640, a two-node one-way `service=driveway`. The probe
+ends on the driveway itself. The likely cause (not yet proven) is that Valhalla
+does not enforce a restriction when the route's destination lies on the
+restricted `to` edge. Practical impact: only when navigating to that exact
+private driveway. It needs a human decision: either confirm on the ground or
+in street photos and accept it, or add an app-side guard. Nothing was changed.
