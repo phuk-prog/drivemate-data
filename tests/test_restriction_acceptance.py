@@ -98,6 +98,45 @@ class EngineLimitationTests(unittest.TestCase):
         self.assertEqual(1, both["counts"]["fail"])
         self.assertFalse(both["accepted"])
 
+    def _run_rewritten(self, router, rewritten):
+        parsed = [ra.parse_relation(rel(30, members(SOUTH, SOUTH), restriction="only_u_turn"))]
+        return ra.run(ways(), parsed, lambda wanted: {n: COORDS[n] for n in wanted if n in COORDS},
+                      router, "synthetic", rewritten)
+
+    def test_rewritten_only_u_turn_is_probed_not_waived(self):
+        ignoring = FakeRouter({NORTH: [edge(SOUTH, 2), edge(NORTH, 4)],
+                               EAST: [edge(SOUTH, 2), edge(EAST, 3)],
+                               WEST: [edge(SOUTH, 2), edge(WEST, 5)]})
+        report = self._run_rewritten(ignoring, {("only_u_turn", 30)})
+        self.assertEqual(0, report["counts"]["engine_unsupported"])
+        self.assertEqual(1, report["counts"]["fail"])  # a rewrite that did not work still fails
+        self.assertTrue(report["failures"][0]["enforced_by_rewrite"])
+        self.assertFalse(report["accepted"])
+        obeying = self._run_rewritten(FakeRouter({}), {("only_u_turn", 30)})
+        self.assertEqual(0, obeying["counts"]["engine_unsupported"])
+        self.assertEqual([30], obeying["rewritten_tested"])
+        self.assertIn("rewritten", ra.summary_markdown(obeying))
+
+    def test_unrewritten_only_u_turn_stays_unsupported(self):
+        report = self._run_rewritten(FakeRouter({}), {("only_u_turn", 99)})
+        self.assertEqual(1, report["counts"]["engine_unsupported"])
+        self.assertFalse(report["accepted"])
+
+    def test_rewrite_report_must_match_source(self):
+        import json
+        import tempfile
+        body = {"schema": 1, "restriction": "only_u_turn", "input": {"sha256": "a" * 64},
+                "rewritten": [{"relation": 30, "generated": [{"id": 9000000000000}]},
+                              {"relation": 31, "generated": []}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "rewrite.json"
+            path.write_text(json.dumps(body))
+            self.assertEqual({("only_u_turn", 30)}, ra.load_rewrite_report(path, "a" * 64))
+            with self.assertRaises(ValueError):
+                ra.load_rewrite_report(path, "b" * 64)
+            with self.assertRaises(ValueError):
+                ra.load_rewrite_report(path, None)
+
 
 class NoTurnTests(unittest.TestCase):
     def test_no_right_turn_passes_with_legal_detour(self):
@@ -331,6 +370,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", triggers)
         self.assertEqual(["codex/architecture-foundation"], triggers["push"]["branches"])
         self.assertEqual({"scripts/restriction_acceptance.py", "tests/test_restriction_acceptance.py",
+                          "scripts/restriction_rewrite.py", "tests/test_restriction_rewrite.py",
                           ".github/workflows/manchester-acceptance.yml"}, set(triggers["push"]["paths"]))
 
     def test_actions_are_pinned_and_router_version_fixed(self):
@@ -342,6 +382,13 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("pyvalhalla==3.6.3", text)
         self.assertIn("greater-manchester-latest.osm.pbf", text)
         self.assertIn("restriction_acceptance.py", text)
+
+    def test_graph_built_from_rewritten_extract_and_checked_against_original(self):
+        text = (ROOT / ".github/workflows/manchester-acceptance.yml").read_text()
+        self.assertIn("restriction_rewrite.py --input work/base.osm.pbf \\\n            --output work/rewritten.osm.pbf", text)
+        self.assertIn("valhalla_build_tiles -c work/valhalla.json work/rewritten.osm.pbf", text)
+        self.assertIn("--pbf work/base.osm.pbf", text)
+        self.assertIn("--rewrite-report work/restriction-rewrite.json", text)
 
 
 if __name__ == "__main__":

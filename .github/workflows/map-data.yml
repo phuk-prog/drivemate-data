@@ -510,7 +510,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq osmium-tool jq pigz > /dev/null
           python3 -m venv work/vh
-          work/vh/bin/pip install -q pyvalhalla==3.6.3
+          work/vh/bin/pip install -q pyvalhalla==3.6.3 osmium==4.3.1
           curl -sSfL -o work/valhalla_build_extract https://raw.githubusercontent.com/valhalla/valhalla/3.6.3/scripts/valhalla_build_extract
           echo '37daac2ff760552c79431b41653be6d457e7e30d051e400c29064208fce65ae4  work/valhalla_build_extract' | sha256sum --check --strict
 
@@ -525,6 +525,10 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="$PWD/work/vh/bin:$PATH"
+          # Valhalla 3.6.3 ignores only_u_turn: replace simple ones with equivalent no_* relations.
+          work/vh/bin/python scripts/restriction_rewrite.py --input work/base.osm.pbf \
+            --output work/rewritten.osm.pbf --report work/restriction-rewrite.json
+          mv work/rewritten.osm.pbf work/base.osm.pbf
           # Let Valhalla apply access and restriction semantics to the full source.
           # Filtering highway classes can discard explicitly vehicle-accessible ways.
           mkdir -p work/tiles
@@ -537,6 +541,7 @@ jobs:
           python3 work/valhalla_build_extract -c work/valhalla.json -v 2>&1 | tail -n 2
           rm -rf work/tiles work/base.osm.pbf
           ls -lh work/uk.tar
+          jq -c '{counts, skipped_by_reason}' work/restriction-rewrite.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Test journeys across the UK (must all work before publishing)
         run: |

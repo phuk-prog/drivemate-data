@@ -180,3 +180,48 @@ proven in replay tests.
 A full-area run of the conservative all-probes verdict at [run 38056304326](https://github.com/phuk-prog/drivemate-data/actions/runs/38056304326) found 1,849 PASS, 140 inconclusive, 1 violation and 3 engine-unsupported restrictions out of 2,602 total relations, with 609 skipped. The earlier run had 1,870 PASS and 119 inconclusive. This shows that the previous "one passing probe is enough" verdict could conceal unresolved alternate exits. The forbidden driveway turn still fails at the 80% destination, with the 35% destination inconclusive. This is an accuracy improvement in reporting, not an engine repair.
 
 The existing full-pass fake-router test was also corrected to supply test routes for **all four** exits instead of leaving two untested. Any known engine-unsupported type is now classified as such even when its probes are all unroutable or inconclusive. Neither adjustment changes routing behaviour in the Android app or clears the release gate.
+
+## `only_u_turn` rewrite before graph building (10 October 2026)
+
+Script: `scripts/restriction_rewrite.py`. Tests: `tests/test_restriction_rewrite.py`.
+Valhalla 3.6.3 ignores `only_u_turn`, so before every Valhalla graph build (the
+`routing` job in `map-data.yml`, this acceptance workflow and the route cross-check)
+the extract is rewritten. Each simple node-via `only_u_turn` (one from way, one via
+node, one to way that is the from way or a separately tagged opposite carriageway) is
+replaced by the logically equivalent prohibitions Valhalla does enforce: for every
+other exit that can be driven away from the via node, one `no_straight_on`,
+`no_left_turn` or `no_right_turn` (bearing change under 45° is straight on), plus
+`no_u_turn` back onto the from way when the U-turn goes to the opposite carriageway.
+`no_entry` is not used. Every other tag (`except`, `day_on`/`hour_on`,
+`restriction:conditional`, `restriction:<vehicle>`) is copied with only the type
+substituted. New relations use IDs from 9,000,000,000,000 upwards, carry
+`drivemate:rewritten_from`, and the original is removed. Exits on footways and
+similar are not banned; an exit with unknown one-way state is banned.
+
+Left unchanged and reported (still `engine_unsupported`, still blocking): way-via or
+several from/to members, mixed restriction values, missing geometry, a from or to
+way passing through the via node, and **an exit way that passes through the via
+node**. The last is a measured engine limit: on a synthetic T-junction where the main
+road is one way through the via node, Valhalla applied a simple restriction to only
+one of its two edges, whatever the turn type, so the other turn stayed open.
+
+The acceptance check is still run against the *original* extract, with
+`--rewrite-report`. A rewritten relation (report SHA-256 must match the extract) is
+then probed like any `only_*` relation instead of being classed engine-unsupported,
+so a rewrite that did not work shows up as a failure. Anything not rewritten keeps
+the old fail-closed status.
+
+Local evidence (pyvalhalla 3.6.3, synthetic extract, before/after builds):
+
+| Junction | Before rewrite | After rewrite |
+|---|---|---|
+| 4-way, only_u_turn on the south arm: straight, left, right | all taken directly | all refused (legal ring-road detour) |
+| T with the main road split at the via node: left, right | both taken directly | both refused |
+| T with the main road one way through the via node | taken directly | not rewritten (skipped, stays engine_unsupported) |
+
+`restriction_acceptance.py` on the same graphs: before 2 fail + 1 unsupported, after
+2 pass + 1 unsupported (exit code still 1). On live OSM data (API, 10 October 2026)
+r13442755 and r13613008 would be rewritten (2 and 1 prohibitions). r14121155 (Gradient
+Close) is skipped because its exit way passes through the via node, so it remains an
+open blocker. `route_crosscheck.py` does not yet read the rewrite report and still
+counts every `only_u_turn` as unenforced.

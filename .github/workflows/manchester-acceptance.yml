@@ -12,6 +12,8 @@ on:
     paths:
       - scripts/restriction_acceptance.py
       - tests/test_restriction_acceptance.py
+      - scripts/restriction_rewrite.py
+      - tests/test_restriction_rewrite.py
       - .github/workflows/manchester-acceptance.yml
 
 permissions:
@@ -41,7 +43,7 @@ jobs:
           sudo apt-get install -y -qq osmium-tool jq > /dev/null
           mkdir -p work
           python3 -m venv work/vh
-          work/vh/bin/pip install -q pyvalhalla==3.6.3
+          work/vh/bin/pip install -q pyvalhalla==3.6.3 osmium==4.3.1
           curl -sSfL -o work/valhalla_build_extract https://raw.githubusercontent.com/valhalla/valhalla/3.6.3/scripts/valhalla_build_extract
           echo '37daac2ff760552c79431b41653be6d457e7e30d051e400c29064208fce65ae4  work/valhalla_build_extract' | sha256sum --check --strict
 
@@ -60,6 +62,13 @@ jobs:
             echo "- Retrieved: $(cat work/source-retrieved.txt)"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Rewrite only_u_turn restrictions Valhalla 3.6.3 ignores (equivalent no_* relations)
+        run: |
+          set -euo pipefail
+          work/vh/bin/python scripts/restriction_rewrite.py --input work/base.osm.pbf \
+            --output work/rewritten.osm.pbf --report work/restriction-rewrite.json
+          jq -c '{counts, skipped_by_reason}' work/restriction-rewrite.json >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build the road graph (same commands as the map-data routing job)
         run: |
           set -euo pipefail
@@ -68,8 +77,8 @@ jobs:
           python3 work/vh/lib/python3*/site-packages/valhalla/valhalla_build_config.py \
             --mjolnir-tile-dir "$PWD/work/tiles" --mjolnir-tile-extract "$PWD/work/gm.tar" \
             --mjolnir-admin "$PWD/work/admin.sqlite" --mjolnir-concurrency "$(nproc)" > work/valhalla.json
-          valhalla_build_admins -c work/valhalla.json work/base.osm.pbf 2>&1 | tail -n 3
-          valhalla_build_tiles -c work/valhalla.json work/base.osm.pbf 2>&1 | tail -n 5
+          valhalla_build_admins -c work/valhalla.json work/rewritten.osm.pbf 2>&1 | tail -n 3
+          valhalla_build_tiles -c work/valhalla.json work/rewritten.osm.pbf 2>&1 | tail -n 5
           python3 work/valhalla_build_extract -c work/valhalla.json -v 2>&1 | tail -n 2
           rm -rf work/tiles
           sha256sum work/gm.tar | cut -d' ' -f1 > work/graph.sha256
@@ -80,6 +89,7 @@ jobs:
           set -euo pipefail
           work/vh/bin/python scripts/restriction_acceptance.py \
             --pbf work/base.osm.pbf --graph work/gm.tar --region greater-manchester \
+            --rewrite-report work/restriction-rewrite.json \
             --report work/restriction-acceptance.json --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Retain acceptance evidence
@@ -91,6 +101,7 @@ jobs:
           if-no-files-found: warn
           path: |
             work/restriction-acceptance.json
+            work/restriction-rewrite.json
             work/source.sha256
             work/source-retrieved.txt
             work/source-info.json

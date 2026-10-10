@@ -506,7 +506,26 @@ def pbf_to_opl(pbf, opl):
 
 # --------------------------------------------------------------------------- driver
 
-def run(ways, relations, coords_loader, router, region):
+def load_rewrite_report(path, source_sha256):
+    """IDs of relations restriction_rewrite.py replaced with engine-supported prohibitions.
+
+    Fail closed: the report must describe exactly this source extract (SHA-256 match),
+    otherwise nothing counts as rewritten.
+    """
+    report = json.loads(Path(path).read_text(encoding="utf-8"))
+    if report.get("schema") != 1 or report.get("restriction") not in ENGINE_UNSUPPORTED:
+        raise ValueError("not a restriction_rewrite report")
+    if not source_sha256 or report.get("input", {}).get("sha256") != source_sha256:
+        raise ValueError("rewrite report was made from a different extract")
+    ids = set()
+    for entry in report.get("rewritten", []):
+        if entry.get("generated"):
+            ids.add((report["restriction"], int(entry["relation"])))
+    return ids
+
+
+def run(ways, relations, coords_loader, router, region, rewritten=frozenset()):
+    """``rewritten``: (restriction type, relation id) pairs replaced before graph building."""
     counts, skipped, failures, by_type = Counter(), Counter(), [], Counter()
     examples = {"no_route": [], "inconclusive": []}
     selected = []
@@ -537,13 +556,15 @@ def run(ways, relations, coords_loader, router, region):
             wanted.update(nodes)
     coords = coords_loader(wanted)
     unsupported = []
+    rewritten_tested = []
     for relation in selected:
         case, reason = build_case(relation, ways, coords, node_ways)
         if case is None:
             skipped[reason] += 1
             continue
         status, probes = judge_case(case, router)
-        if case.restriction in ENGINE_UNSUPPORTED:
+        enforced_by_rewrite = (case.restriction, case.relation) in rewritten
+        if case.restriction in ENGINE_UNSUPPORTED and not enforced_by_rewrite:
             # The pinned engine's graph builder does not represent this
             # restriction. Even a no-route, inconclusive, or apparently safe
             # sample is not proof of support. Always retain the blocker,
@@ -571,6 +592,11 @@ def run(ways, relations, coords_loader, router, region):
             "to_url": f"https://www.openstreetmap.org/way/{case.to_way}",
             "probes": probes,
         }
+        if enforced_by_rewrite:
+            # Judged on its probes like any only_* relation: the graph was built from
+            # equivalent no_* relations (scripts/restriction_rewrite.py).
+            record["enforced_by_rewrite"] = True
+            rewritten_tested.append(case.relation)
         if status == "fail" and len(failures) < MAX_FAILURE_DETAIL:
             failures.append(record)
         elif status == "engine_unsupported":
@@ -583,6 +609,7 @@ def run(ways, relations, coords_loader, router, region):
         "restriction_relations": len(seen), "tested": tested,
         "counts": {s: counts.get(s, 0) for s in ("pass", "fail", "engine_unsupported", "no_route", "inconclusive")},
         "engine_unsupported": unsupported,
+        "rewritten_tested": sorted(rewritten_tested),
         "engine_unsupported_note": ("Valhalla 3.6.3 tile building does not recognise these restriction "
                                     "types (only_u_turn), so they are not enforced. A real navigation "
                                     "risk, tracked separately; not a pass."),
@@ -634,10 +661,22 @@ def summary_markdown(report):
             if f.get("target_way_context", {}).get("two_node_driveway"):
                 probes = ", ".join(f"{p['target_fraction']:.2f}: {p['status']}" for p in f["probes"])
                 lines.append(f"- r{f['relation']} two-node driveway probe positions: {probes} (no suppression).")
+    if report.get("rewritten_tested"):
+        lines += ["", f"only_u_turn relations rewritten to engine-supported prohibitions and probed: "
+                  f"{len(report['rewritten_tested'])} (see enforced_by_rewrite in the JSON)."]
     lines += ["", "**Known routing-safety blockers: " + str(report["known_routing_safety_blockers"]) + "** (failed restriction probes and unsupported engine restrictions; other skipped/inconclusive cases are not cleared)."]
     lines += ["", "Accepted: **" + ("yes" if report["accepted"] else "NO") + "**. "
               "Detection only; OSM correctness and signage are not verified."]
     return "\n".join(lines) + "\n"
+
+
+def file_sha256(path):
+    import hashlib
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def main(argv=None):
@@ -649,9 +688,20 @@ def main(argv=None):
     p.add_argument("--region", default="greater-manchester")
     p.add_argument("--report", type=Path, required=True)
     p.add_argument("--summary", type=Path, help="append a Markdown table here (e.g. $GITHUB_STEP_SUMMARY)")
+    p.add_argument("--rewrite-report", type=Path,
+                   help="restriction_rewrite.py report for --pbf; its rewritten only_u_turn relations "
+                        "are probed instead of being classed engine-unsupported")
     args = p.parse_args(argv)
     if not args.graph.exists():
         p.error("Valhalla graph not found")
+    rewritten = frozenset()
+    if args.rewrite_report is not None:
+        if args.pbf is None:
+            p.error("--rewrite-report needs --pbf (its SHA-256 is checked against the report)")
+        try:
+            rewritten = frozenset(load_rewrite_report(args.rewrite_report, file_sha256(args.pbf)))
+        except (OSError, ValueError, KeyError) as error:
+            p.error(f"rewrite report rejected: {error}")
     with tempfile.TemporaryDirectory(prefix="drivemate-acceptance-opl-") as tmp:
         opl = args.opl
         if args.pbf is not None:
@@ -663,7 +713,7 @@ def main(argv=None):
             p.error("OPL not found")
         ways, relations = read_opl(opl)
         report = run(ways, relations, lambda wanted: read_node_coords(opl, wanted),
-                     ValhallaRouter(args.graph), args.region)
+                     ValhallaRouter(args.graph), args.region, rewritten)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     text = summary_markdown(report)
