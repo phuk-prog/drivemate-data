@@ -112,3 +112,52 @@ The Android development branch now contains a read-only region package
 selector at commit `6d92e843e2ad80995f967ae621a60d89276ccfe4`;
 exact-source CI and device checks must be confirmed before claiming it
 verified. Preserve production map/download formats until then.
+
+
+## Approved deployment order — 10 October 2026 (Manchester first)
+
+**User approval:** implement all reusable UK navigation/mapping code and
+shared tests first; use real Greater Manchester for full end-to-end field
+and emulator verification; after the pilot and licensing gates have passed,
+expand the UK map section-by-section using scheduled nonoverlapping runs.
+Do not interpret broad code implementation as proof that missing legal
+restrictions, camera data, lane markings or house numbers are complete.
+
+**Prepared:** the regional expansion queue and nonpublishing workflow live
+at `scripts/region_batch_queue.py` and `.github/workflows/regional-batch.yml`,
+with immutable generation-scoped ledger in
+`docs/regional-batch-ledger.json`. Run requests are disabled in
+`docs/regional-batch-request.json` until the required code and Manchester
+acceptance gates are verified. The queue seeds the successful Manchester
+source-archive pilot from run `38031100907`, then orders the remaining
+z8 root areas outward from Manchester, keeping subdivided packages together.
+Every subsequent run checks hashes, archive structure, tile identities,
+package byte limits and complete output evidence before committing success.
+It never publishes a raw package or activates it in an app.
+
+**Exact-source evidence:** data CI run
+https://github.com/phuk-prog/drivemate-data/actions/runs/38034869594
+passed with 112 unit/regression tests. Android's latest earlier
+regional-rendering test workflow run
+https://github.com/phuk-prog/DriveMate/actions/runs/38034154443
+passed on commit `d4957a7`; synthetic emulator geometry does not
+establish real Manchester feature completeness or data rights.
+
+**Scheduled controller:** one daily ChatGPT DriveMate UK Expansion task
+checks/continues the existing repositories sequentially. GitHub Actions
+`schedule` executes only workflows on the repository default branch,
+so this developer-branch batch runner is triggered by an expressly enabled
+new sequence committed to `docs/regional-batch-request.json` (or a
+manual dispatch when available), not an ungrounded claim of native GitHub
+cron availability. Current bulk expansion is deliberately paused, and
+no map content/Android production APK/main branch was changed.
+
+Next milestones before enabling regional bulk jobs:
+1. Implement and source-test remaining compatible reusable software modules.
+2. Demonstrate real-area Manchester MapLibre rendering and UK route legality,
+   address/POI source integrity, seam and offline recovery in the Android app.
+3. Review distribution/source rights (especially Overture lineage, imagery
+   and OS obligations), and decide safe permitted publication/attribution.
+4. Re-check CI, privacy, performance, output formats and budgets, then
+   explicitly change the batch request to enabled with sequence 1.
+5. Run one z8-area validation at a time, persisting proofs before resuming.
