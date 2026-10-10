@@ -224,3 +224,23 @@ This closes "Validate actual complete UK map" for generated-data quality.
 It makes **no licence decision**. These richer layers (limits, road
 information, zones, search) are not yet in the published release, so phones
 still lack them until a publication is approved.
+
+## Second batch — 10 October 2026 (merged to `codex/architecture-foundation` with approval)
+
+The user approved merging the Claude branches into `codex/architecture-foundation`
+(both were fast-forwards). Exact-source CI then ran on the development branch.
+
+| Item | Status | Evidence |
+|---|---|---|
+| Data CI on merged heads | Verified | source checks green on every pushed commit; regional pilot re-run green with the reproducible exporter |
+| Android CI on merged head `dd5b60f` | Verified | source/lint/JVM plus emulator: native offline routing, device tests, navigation robot, no crashes |
+| Real-data fixture cutter (`pmtiles_fixture.py`) | Implemented, tested | 3 tests; central Manchester fixture 3.0 MB, byte-for-byte tiles |
+| Android real Manchester rendering device test | **Passed on emulator** | Deansgate, Peter Street, Oxford Street and Mosley Street; buildings; house numbers; main roads; base/detail zoom split. Two follow-up test-harness fixes: main-thread exceptions and waiting for the first native frame |
+| Regional publication path (`region_publication.py`, publisher gate, build step) | Implemented, real-data validated; **off** until `PUBLISH_REGIONAL_MAPS=true` | 207/207 real archives staged and validated |
+| Android `RegionalMaps` controller (published manifest only, cross-checked hashes) | Implemented, JVM-tested | No UI or renderer switch yet |
+| Places provenance sidecar | Implemented (agent), reviewed, merged | 142 data tests; Overture release now pinned and recorded |
+| Northern Ireland search sources | Researched | OSNI gazetteers usable under OGL; ONSPD BT rows need written LPS permission |
+
+Remaining before regional activation: the live-map regional renderer switch
+plus its on-device check, a user decision on licensing (then set
+`PUBLISH_REGIONAL_MAPS`), and enabling `docs/regional-batch-request.json`.
