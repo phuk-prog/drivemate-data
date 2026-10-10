@@ -33,14 +33,14 @@ class RoutingWorkflowTest(unittest.TestCase):
         download = next(i for i, s in enumerate(steps) if s.get('name', '').startswith('OpenStreetMap base'))
         self.assertLess(capacity, download)
         self.assertIn('unified_preflight.py', steps[capacity]['run'])
-        arrows = next(s for s in steps if s.get('name', '').startswith('Painted lane arrows'))
-        self.assertEqual(arrows['if'], "github.event_name != 'workflow_dispatch' || inputs.validate_only == false")
+        # Mapillary removed entirely (owner decision, 10 Oct 2026): no arrow step, OSM-only limits.
+        self.assertFalse(any(s.get('name', '').startswith('Painted lane arrows') for s in steps))
         limits = next(s for s in steps if s.get('name', '').startswith('Speed limits'))
-        baseline = limits['run'].split('if [ "$VALIDATE_ONLY" = "true" ]; then', 1)[1].split('\nfi', 1)[0]
-        self.assertIn('scripts/limits.py', baseline)
-        self.assertIn('exit 0', baseline)
-        self.assertNotIn('--roads', baseline)
-        self.assertNotIn('--signs-cache', baseline)
+        self.assertIn('scripts/limits.py', limits['run'])
+        self.assertNotIn('--roads', limits['run'])
+        self.assertNotIn('--signs-cache', limits['run'])
+        self.assertNotIn('MAPILLARY_TOKEN', str(limits.get('env', {})))
+        self.assertNotIn('MAPILLARY_TOKEN', path.read_text())
 
     def test_failed_graph_builder_pipeline_cannot_be_hidden_by_tail(self):
         path = Path(__file__).resolve().parents[1] / '.github/workflows/map-data.yml'

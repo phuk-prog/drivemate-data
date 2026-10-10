@@ -22,3 +22,11 @@ approved until they say so.
 4. Northern Ireland postcodes: ask LPS in writing (a draft can be prepared), or accept none offline.
 
 Not checked: the app's current attribution screens, and whether vector tiles legally count as a produced work or a database (the actions above cover both).
+
+## Owner decision — 10 October 2026
+
+The owner approved "as recommended":
+1. OpenStreetMap, OS Open Names and OSNI: **approved**, with the credits above (in-app "Map data & credits" screen, `licenses/NOTICE.md`, licence links in the data files).
+2. Overture places: **approved**, with the CDLA, Apache and Foursquare notices shipped in each release (`licenses/`).
+3. Mapillary: **removed**. The arrow and sign steps were deleted from `map-data.yml` and no Mapillary data is published. The app never called Mapillary directly.
+4. Northern Ireland postcodes: a letter to LPS asking for written permission is drafted in `docs/lps-permission-request.md`. Until permission is granted, no BT postcode centroids are bundled.

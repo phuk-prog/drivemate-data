@@ -185,35 +185,8 @@ jobs:
               | tee -a "$GITHUB_STEP_SUMMARY"
           done
 
-      - name: Painted lane arrows from street photos (Mapillary), where the map has none
-        if: github.event_name != 'workflow_dispatch' || inputs.validate_only == false
-        env:
-          GH_TOKEN: ${{ github.token }}
-          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
-          MAPILLARY_MAX_FETCH: "15000"
-        run: |
-          # Last week's answers, so each week only checks the oldest or new junctions.
-          # Last complete build's extras release (dated, via latest.json); older builds used $XTAG.
-          PREV=$(gh release download "$TAG" -p latest.json -O - 2>/dev/null | jq -r '.extra_tag // empty' 2>/dev/null || true)
-          PREV="${PREV:-$XTAG}"
-          got=0
-          for i in 1 2 3; do
-            gh release download "$PREV" -p mapillary-arrows-cache.json.gz -D work --clobber 2>/dev/null && { got=1; break; }
-            gh release download "$TAG" -p mapillary-arrows-cache.json.gz -D work --clobber 2>/dev/null && { got=1; break; }
-            sleep 10
-          done
-          had=0
-          if [ "$got" = 0 ]; then
-            gh release view "$PREV" --json assets -q '.assets[].name' 2>/dev/null | grep -qx mapillary-arrows-cache.json.gz && had=1
-            gh release view "$TAG" --json assets -q '.assets[].name' 2>/dev/null | grep -qx mapillary-arrows-cache.json.gz && had=1
-            echo "no earlier arrows fetched (exists: $had)"
-          fi
-          # It exists but couldn't be fetched: stop rather than publish a nearly empty cache over
-          # weeks of saved answers. Phones keep last week's complete build; just run it again.
-          [ "$had" = 0 ] || { echo "::error::Couldn't fetch last build's arrows cache"; exit 1; }
-          python3 scripts/arrows.py --selftest
-          python3 scripts/arrows.py work/roads.geojsonseq out/lanes work/mapillary-arrows-cache.json.gz out/mapillary-arrows-cache.json.gz \
-            || echo "::warning::Painted arrows step failed; lane files kept as they were"
+      # Mapillary painted-arrow step removed 10 Oct 2026 (owner decision): Mapillary's terms
+      # forbid use in navigation (see docs/licensing-decision-brief.md). Lanes come from OSM only.
 
       - name: Road warnings and turn landmarks (from OpenStreetMap), in squares
         shell: bash
@@ -240,13 +213,8 @@ jobs:
           python3 scripts/cameras.py work/cameras.opl out/cameras-uk.json | tee -a out/build-info.txt
           ls -lh out/cameras-uk.json
 
-      - name: Speed limits (whole UK, OpenStreetMap + street-photo signs where it has none), in squares
+      - name: Speed limits (whole UK, OpenStreetMap only), in squares
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
-          MAPILLARY_SIGNS_MAX_FETCH: "4000"
-          VALIDATE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_only }}
         run: |
           set -o pipefail
           python3 scripts/limits.py --selftest
@@ -254,37 +222,11 @@ jobs:
           osmium export work/maxspeed.osm.pbf -f geojsonseq -o work/maxspeed.geojsonseq --overwrite --geometry-types=linestring -u type_id
           osmium tags-filter work/base.osm.pbf w/highway=motorway -o work/motorways.osm.pbf --overwrite
           osmium export work/motorways.osm.pbf -f geojsonseq -o work/motorways.geojsonseq --overwrite --geometry-types=linestring -u type_id
-          # Validate the independently reusable OSM baseline without acquiring
-          # or incorporating unreviewed imagery observations/caches.
-          if [ "$VALIDATE_ONLY" = "true" ]; then
-            python3 scripts/limits.py work/maxspeed.geojsonseq out/limits work/motorways.geojsonseq out/limit-checks.md \
-              | tee -a out/build-info.txt
-            echo 'validation_sources=OSM lane/limit baseline; Mapillary omitted pending rights and human verification' >> out/build-info.txt
-            cat out/limit-checks.md >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          # Speed-limit signs found in Mapillary photos in earlier weeks (only old or new areas are asked again).
-          # Last complete build's extras release (dated, via latest.json); older builds used $XTAG.
-          PREV=$(gh release download "$TAG" -p latest.json -O - 2>/dev/null | jq -r '.extra_tag // empty' 2>/dev/null || true)
-          PREV="${PREV:-$XTAG}"
-          got=0
-          for i in 1 2 3; do
-            gh release download "$PREV" -p mapillary-signs-cache.json.gz -D work --clobber 2>/dev/null && { got=1; break; }
-            sleep 10
-          done
-          had=0
-          if [ "$got" = 0 ]; then
-            gh release view "$PREV" --json assets -q '.assets[].name' 2>/dev/null | grep -qx mapillary-signs-cache.json.gz && had=1
-            echo "no earlier signs fetched (exists: $had)"
-          fi
-          # It exists but couldn't be fetched: stop rather than publish a nearly empty cache over
-          # weeks of saved answers. Phones keep last week's complete build; just run it again.
-          [ "$had" = 0 ] || { echo "::error::Couldn't fetch last build's signs cache"; exit 1; }
+          # OSM only: Mapillary sign detections removed 10 Oct 2026 (owner decision; terms forbid navigation use).
           python3 scripts/limits.py work/maxspeed.geojsonseq out/limits work/motorways.geojsonseq out/limit-checks.md \
-            --roads work/roads.geojsonseq --signs-cache-in work/mapillary-signs-cache.json.gz \
-            --signs-cache-out out/mapillary-signs-cache.json.gz | tee -a out/build-info.txt
+            | tee -a out/build-info.txt
+          echo 'limit_sources=OpenStreetMap maxspeed only (no Mapillary)' >> out/build-info.txt
           ls out/limits | wc -l; du -sh out/limits
-          # The list of limits that look wrong, on the run's summary page.
           cat out/limit-checks.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Charge and emission zones (Congestion Charge, ULEZ, Clean Air Zones, Scottish LEZs)
