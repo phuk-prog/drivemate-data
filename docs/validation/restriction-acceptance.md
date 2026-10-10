@@ -95,3 +95,14 @@ The one failure on real data is
 (checked by searching the `valhalla_build_tiles` binary for its restriction strings). It
 ignores `only_u_turn`, so every `only_u_turn` relation will fail this check. This is a real
 gap between OSM and the engine, to be reviewed by a human. It is not a data repair.
+
+## Known engine limitation: `only_u_turn` (status `engine_unsupported`)
+
+Valhalla 3.6.3's tile builder does not recognise `only_u_turn`, so those
+relations are not enforced and routes may ignore them. They are a real
+navigation risk. The check reports them under a separate status,
+`engine_unsupported`, with full relation links in the JSON and the job summary,
+instead of failing every run. A permanently red check would hide any new,
+unexpected failure. Every other failing restriction still rejects the run.
+Fixing this needs either a Valhalla release that supports `only_u_turn` or an
+app-side guard; both are outstanding.

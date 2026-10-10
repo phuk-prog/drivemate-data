@@ -72,6 +72,25 @@ def run(relations, router, road_ways=None):
                   router, "synthetic")
 
 
+class EngineLimitationTests(unittest.TestCase):
+    def test_ignored_only_u_turn_is_listed_separately_and_does_not_mask_new_failures(self):
+        ignoring = FakeRouter({NORTH: [edge(SOUTH, 2), edge(NORTH, 4)],
+                               EAST: [edge(SOUTH, 2), edge(EAST, 3)],
+                               WEST: [edge(SOUTH, 2), edge(WEST, 5)]})
+        report = run([rel(30, members(SOUTH, SOUTH), restriction="only_u_turn")], ignoring)
+        self.assertEqual(0, report["counts"]["fail"])
+        self.assertEqual(1, report["counts"]["engine_unsupported"])
+        self.assertEqual(30, report["engine_unsupported"][0]["relation"])
+        self.assertTrue(report["accepted"])
+        self.assertIn("only_u_turn", ra.summary_markdown(report))
+        # An ordinary restriction failing alongside it still rejects the run.
+        both = run([rel(30, members(SOUTH, SOUTH), restriction="only_u_turn"), rel(31, members())],
+                   FakeRouter({**DIRECT, NORTH: [edge(SOUTH, 2), edge(NORTH, 4)],
+                               WEST: [edge(SOUTH, 2), edge(WEST, 5)]}))
+        self.assertEqual(1, both["counts"]["fail"])
+        self.assertFalse(both["accepted"])
+
+
 class NoTurnTests(unittest.TestCase):
     def test_no_right_turn_passes_with_legal_detour(self):
         report = run([rel(1, members())], FakeRouter(DETOUR))

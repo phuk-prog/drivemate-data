@@ -39,6 +39,8 @@ VIA_MATCH_METRES = 3.0
 MIN_LEG_METRES = 4.0  # shorter from/to stretches cannot hold a probe point clear of both nodes
 UTURN_DEGREES = 135.0
 MAX_FAILURE_DETAIL = 10000
+# Restriction types Valhalla 3.6.3 does not build into its graph (checked in its tile builder).
+ENGINE_UNSUPPORTED = {"only_u_turn"}
 NODE = re.compile(r"n([0-9]+)\Z")
 
 
@@ -515,12 +517,17 @@ def run(ways, relations, coords_loader, router, region):
             node_ways.setdefault(n, set()).add(wid)
             wanted.update(nodes)
     coords = coords_loader(wanted)
+    unsupported = []
     for relation in selected:
         case, reason = build_case(relation, ways, coords, node_ways)
         if case is None:
             skipped[reason] += 1
             continue
         status, probes = judge_case(case, router)
+        if status == "fail" and case.restriction in ENGINE_UNSUPPORTED:
+            # Known routing-engine gap, listed separately so that it is never
+            # hidden yet cannot mask a new, unexpected failure.
+            status = "engine_unsupported"
         counts[status] += 1
         by_type[case.restriction + ":" + status] += 1
         record = {
@@ -535,13 +542,19 @@ def run(ways, relations, coords_loader, router, region):
         }
         if status == "fail" and len(failures) < MAX_FAILURE_DETAIL:
             failures.append(record)
+        elif status == "engine_unsupported":
+            unsupported.append(record)
         elif status in examples and len(examples[status]) < 50:
             examples[status].append(record)
     tested = sum(counts.values())
     return {
         "schema": 1, "region": region,
         "restriction_relations": len(seen), "tested": tested,
-        "counts": {s: counts.get(s, 0) for s in ("pass", "fail", "no_route", "inconclusive")},
+        "counts": {s: counts.get(s, 0) for s in ("pass", "fail", "engine_unsupported", "no_route", "inconclusive")},
+        "engine_unsupported": unsupported,
+        "engine_unsupported_note": ("Valhalla 3.6.3 tile building does not recognise these restriction "
+                                    "types (only_u_turn), so they are not enforced. A real navigation "
+                                    "risk, tracked separately; not a pass."),
         "skipped": dict(sorted(skipped.items())),
         "skipped_total": sum(v for k, v in skipped.items() if ":" not in k),
         "by_type": dict(sorted(by_type.items())),
@@ -569,6 +582,12 @@ def summary_markdown(report):
     if report["skipped"]:
         lines += ["", "| Skip reason | Relations |", "|---|---:|"]
         lines += [f"| {k} | {v:,} |" for k, v in report["skipped"].items()]
+    if report.get("engine_unsupported"):
+        lines += ["", "**Not enforced by the routing engine (Valhalla 3.6.3 ignores only_u_turn):**", "",
+                  "| Relation | Type | from | via | to |", "|---|---|---|---|---|"]
+        for f in report["engine_unsupported"][:50]:
+            lines.append(f"| [r{f['relation']}]({f['osm_url']}) | {f['restriction']} | "
+                         f"w{f['from_way']} | n{f['via_node']} | w{f['to_way']} |")
     if report["failures"]:
         lines += ["", "| Failing relation | Type | from | via | to |", "|---|---|---|---|---|"]
         for f in report["failures"][:50]:
