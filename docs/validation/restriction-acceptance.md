@@ -134,3 +134,24 @@ in street photos and accept it, or add an app-side guard. Nothing was changed.
 ## Safety gate: known engine defects never counted as resolved
 
 The machine-readable report now includes known_routing_safety_blockers, the sum of confirmed failed probes and unsupported engine restriction types. The existing limited-scope `accepted` field still means zero detected probe failures, but it is not a production release certificate: unsupported `only_u_turn` cases remain safety blockers even on a green probe run. Skipped and inconclusive restrictions also need separate evidence. The r14551046 prohibited left turn remains a confirmed failing case pending an actual supported routing fix; do not whitelist or downgrade it.
+
+## Paired terminal-edge investigation (2026-10-10)
+
+The Greater Manchester acceptance job repeatedly found OSM relation r14551046
+(`no_left_turn`) ignored on the final destination edge of a two-node service
+driveway. This remains an actual routed violation against the input relation;
+the suggested terminal-edge cause is still a hypothesis, not a proven explanation.
+
+For any node-via `no_*` restriction whose target is a two-node
+`highway=service` / `service=driveway`, the checker now uses both the original
+80%-of-leg destination and a second 35%-of-leg destination. Reports retain the
+position and result for each probe. A failure at either destination continues
+to make the entire acceptance job fail, even if the other is inconclusive or
+has no route. The new synthetic regression tests this rule. This investigation
+does not alter the OSM input, Valhalla graph, routing decisions or public map.
+
+Review the next full Greater Manchester workflow result and test whether
+near/far behaviour differs. Follow with a properly supported engine fix or
+fail-closed route protection, validated against the same OSM relation and
+related regression routes. The three `only_u_turn` engine limitations are
+separate unresolved release-safety blockers.

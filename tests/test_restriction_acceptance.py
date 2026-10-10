@@ -99,6 +99,27 @@ class NoTurnTests(unittest.TestCase):
         self.assertTrue(report["accepted"])
         self.assertEqual([], report["failures"])
 
+    def test_short_driveway_near_and_far_destinations_preserve_violation(self):
+        road = ra.load_ways([
+            way(SOUTH, [1, 2], oneway="yes"),
+            way(EAST, [2, 3], highway="service", service="driveway", oneway="yes"),
+        ])
+        class TerminalEdgeRouter(ra.Router):
+            def route(self, start, end):
+                # Near-endpoint routing is different; illegal far endpoint still fails.
+                if ra.haversine(VIA, (end.lat, end.lon)) < 38.0:
+                    return None
+                return [edge(SOUTH, 2), edge(EAST, 3)]
+        result = run([rel(14551046, members(), restriction="no_left_turn")],
+                     TerminalEdgeRouter(), road)
+        self.assertEqual(1, result["counts"]["fail"])
+        self.assertFalse(result["accepted"])
+        failure = result["failures"][0]
+        self.assertTrue(failure["target_way_context"]["two_node_driveway"])
+        self.assertEqual({0.35, 0.8}, {p["target_fraction"] for p in failure["probes"]})
+        self.assertEqual({"fail", "no_route"}, {p["status"] for p in failure["probes"]})
+        self.assertIn("two-node driveway probe positions", ra.summary_markdown(result))
+
     def test_no_right_turn_fails_on_direct_turn(self):
         report = run([rel(2, members())], FakeRouter(DIRECT))
         self.assertEqual(1, report["counts"]["fail"])

@@ -176,6 +176,7 @@ class Probe:
     start: Point
     end: Point
     forbidden: bool  # True: the direct manoeuvre into target_way is prohibited.
+    target_fraction: float = 0.8  # Diagnostic destination distance along the target leg.
 
 
 @dataclass
@@ -346,20 +347,31 @@ def build_case(relation, ways, coords, node_ways):
             found.append(leg)
         return found
 
-    def probe(way_id, leg, forbidden):
+    def probe(way_id, leg, forbidden, fraction=0.8):
         pts = [coords[n] for n in leg]
         total = length(pts)
         if total < MIN_LEG_METRES:
             return None
         target = 70.0 if way_id == from_way else 40.0
-        along = walk(pts, min(target, total * 0.8))
-        return Probe(way_id, start, Point(along[0][0], along[0][1], along[1]), forbidden)
+        along = walk(pts, min(target, total * fraction))
+        return Probe(way_id, start, Point(along[0][0], along[0][1], along[1]),
+                     forbidden, fraction)
 
     to_legs = exits(to_way)
     if not to_legs:
         return None, "to_way_not_drivable_away_from_via"
     if kind.startswith("no_"):
         case.probes = [p for p in (probe(to_way, leg, True) for leg in to_legs) if p]
+        # Real Greater Manchester r14551046: a prohibited left turn on a
+        # two-node service driveway may be destination-sensitive. Preserve
+        # the original probe and add a nearer one. Any failing probe still
+        # fails the relation; neither result grants a routing exception.
+        target_tags, target_nodes = ways[to_way]
+        if (target_tags.get("highway") == "service"
+                and target_tags.get("service") == "driveway"
+                and len(target_nodes) == 2):
+            case.probes += [p for p in (probe(to_way, leg, True, fraction=0.35)
+                                       for leg in to_legs) if p]
     else:
         case.probes = [p for p in (probe(to_way, leg, False) for leg in to_legs[:1]) if p]
         for other in sorted(node_ways.get(via, ())):
@@ -420,6 +432,7 @@ def judge_case(case, router):
         except ProbeInconclusive as error:
             status, detail = "inconclusive", str(error)
         result = {"target_way": p.target_way, "forbidden_target": p.forbidden,
+                  "target_fraction": p.target_fraction,
                   "status": status, "detail": detail}
         decoder = getattr(router, "last_decoder", None)
         if decoder:
@@ -530,8 +543,18 @@ def run(ways, relations, coords_loader, router, region):
             status = "engine_unsupported"
         counts[status] += 1
         by_type[case.restriction + ":" + status] += 1
+        target_tags, target_nodes = ways[case.to_way]
         record = {
             "relation": case.relation, "restriction": case.restriction,
+            "target_way_context": {
+                "highway": target_tags.get("highway"),
+                "service": target_tags.get("service"),
+                "oneway": target_tags.get("oneway"),
+                "node_count": len(target_nodes),
+                "two_node_driveway": (target_tags.get("highway") == "service"
+                                      and target_tags.get("service") == "driveway"
+                                      and len(target_nodes) == 2),
+            },
             "from_way": case.from_way, "via_node": case.via_node, "to_way": case.to_way,
             "via_location": [round(case.via[0], 7), round(case.via[1], 7)],
             "osm_url": f"https://www.openstreetmap.org/relation/{case.relation}",
@@ -594,6 +617,11 @@ def summary_markdown(report):
         for f in report["failures"][:50]:
             lines.append(f"| [r{f['relation']}]({f['osm_url']}) | {f['restriction']} | "
                          f"w{f['from_way']} | n{f['via_node']} | w{f['to_way']} |")
+    if report["failures"]:
+        for f in report["failures"][:20]:
+            if f.get("target_way_context", {}).get("two_node_driveway"):
+                probes = ", ".join(f"{p['target_fraction']:.2f}: {p['status']}" for p in f["probes"])
+                lines.append(f"- r{f['relation']} two-node driveway probe positions: {probes} (no suppression).")
     lines += ["", "**Known routing-safety blockers: " + str(report["known_routing_safety_blockers"]) + "** (failed restriction probes and unsupported engine restrictions; other skipped/inconclusive cases are not cleared)."]
     lines += ["", "Accepted: **" + ("yes" if report["accepted"] else "NO") + "**. "
               "Detection only; OSM correctness and signage are not verified."]
