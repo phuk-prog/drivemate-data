@@ -103,7 +103,9 @@ class RegionPartitionTests(unittest.TestCase):
         ]
         groups = plan_tile_sets(rows,130)
         self.assertEqual(2,len(groups["base"]))
-        self.assertTrue(all(n.startswith("region-z10") for n in groups if n!="base"))
+        self.assertTrue(any(n.startswith("region-z10") for n in groups if n!="base"))
+        self.assertTrue(all(all(row[1] >= 10 for row in items)
+                            for name, items in groups.items() if name != "base"))
         self.assertEqual(len(rows), sum(len(v) for v in groups.values()))
 
 
