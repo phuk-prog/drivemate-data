@@ -1,9 +1,15 @@
 """Offline postcode and place search for the phone: every postcode in Great Britain, every named
 street, and towns, villages, stations, hospitals, schools, airports, ferry ports and services,
 each with a point to drive to. Built from Ordnance Survey Open Names (Open Government Licence).
+Optionally adds Northern Ireland street and place names from the OSNI Open Data Gazetteers
+(Land & Property Services, Open Government Licence) - never NI postcodes.
 
-Usage: search_offline.py osnames_dir search-offline-uk.tsv.gz
+Usage: search_offline.py osnames_dir search-offline-uk.tsv.gz [--osni-streets FILE] [--osni-places FILE]
        search_offline.py --selftest
+
+  --osni-streets / --osni-places take a CSV or GeoJSON file. Field names are not fixed: a name
+  column and either X/Y (Irish Grid EPSG:29902, or Irish Transverse Mercator EPSG:2157), lat/lon
+  columns or a GeoJSON geometry are detected; the build stops with a clear error when they are not.
 
 FILE FORMAT (search-offline-uk.tsv.gz) — gzip-compressed UTF-8 text, one record per line ('\\n'):
 
@@ -31,16 +37,24 @@ FILE FORMAT (search-offline-uk.tsv.gz) — gzip-compressed UTF-8 text, one recor
   lat, lon  WGS84 degrees, 4 decimal places (about 10 m). For a postcode: its centre point;
         for a street: a point on the street.
 
-  The same street name in the same area is listed once. Northern Ireland is not in OS Open Names,
-  so its postcodes and streets are not in this file (the app's online search covers them).
+  The same street name in the same area is listed once. Northern Ireland is not in OS Open Names.
+  When the OSNI gazetteers are given, NI streets (type R) and towns/villages (C/T/V/H, or O when
+  the file does not say which) are added with the same six fields; their area is the town,
+  council or "Northern Ireland" (there is no postcode district), and NI postcodes are never
+  listed (the ONSPD BT rows may not be redistributed; the app's online search covers them).
 
 Credits (must be shown): Contains OS data © Crown copyright and database rights; Contains Royal
 Mail data © Royal Mail copyright and database right; Contains National Statistics data © Crown
-copyright and database right (OS Open Names, Open Government Licence v3).
+copyright and database right (OS Open Names, Open Government Licence v3). When OSNI records are
+included, the header also carries: Contains LPS Intellectual Property © Crown copyright and
+database right (year) This information is licensed under the terms of the Open Government Licence
 """
+import argparse
 import csv
 import glob
 import gzip
+import json
+import math
 import os
 import re
 import sys
@@ -90,7 +104,225 @@ def columns(osnames_dir):
     return cols
 
 
-def build(osnames_dir, dst, to_wgs=None):
+# ---- Northern Ireland: OSNI Open Data Gazetteers (Land & Property Services, OGL v3) ----
+OSNI_CREDITS = ("Contains LPS Intellectual Property © Crown copyright and database right ({year}) "
+                "This information is licensed under the terms of the Open Government Licence")
+# Northern Ireland envelope (WGS84). Points outside it are rejected and counted.
+NI_LON = (-8.3, -5.3)
+NI_LAT = (53.9, 55.4)
+DEDUPE_METRES = 50.0
+# Header names are compared upper-case with everything but A-Z/0-9 removed ("Street Name" -> STREETNAME).
+OSNI_NAME_COLS = {
+    "streets": ["STREETNAME", "STREET", "STRNAME", "STNAME", "ROADNAME", "THOROUGHFARE", "NAME", "NAME1"],
+    "places": ["PLACENAME", "PLACE", "PLACENAMES", "SETTLEMENT", "SETTLEMENTNAME", "TOWNNAME", "NAME", "NAME1", "TOWN"],
+}
+OSNI_AREA_COLS = ["TOWN", "TOWNNAME", "POSTTOWN", "LOCALITY", "SETTLEMENT", "SETTLEMENTNAME", "TOWNLAND",
+                  "LGD", "LGDNAME", "COUNCIL", "COUNCILNAME", "LOCALGOVERNMENTDISTRICT", "DISTRICT", "COUNTY"]
+OSNI_TYPE_COLS = ["TYPE", "PLACETYPE", "SETTLEMENTTYPE", "CLASS", "CATEGORY", "FEATURETYPE", "LOCALTYPE"]
+OSNI_X_COLS = ["X", "EASTING", "EASTINGS", "XCOORD", "XCOORDINATE", "XCOR", "XCO", "XCOORDS", "IGEASTING", "ITMEASTING", "POINTX"]
+OSNI_Y_COLS = ["Y", "NORTHING", "NORTHINGS", "YCOORD", "YCOORDINATE", "YCOR", "YCO", "YCOORDS", "IGNORTHING", "ITMNORTHING", "POINTY"]
+OSNI_LON_COLS = ["LON", "LONG", "LONGITUDE", "LNG"]
+OSNI_LAT_COLS = ["LAT", "LATITUDE"]
+# Place-type words a gazetteer may carry, mapped onto the existing settlement codes; anything else is O.
+OSNI_PLACE_TYPES = {"CITY": "C", "TOWN": "T", "LARGETOWN": "T", "MEDIUMTOWN": "T", "SMALLTOWN": "T",
+                    "VILLAGE": "V", "HAMLET": "H", "SUBURB": "S", "SUBURBANAREA": "S"}
+
+
+class OsniError(ValueError):
+    pass
+
+
+def _norm(name):
+    return re.sub(r"[^A-Z0-9]", "", str(name).upper())
+
+
+def _pick(fields, wanted):
+    """First field (original spelling) whose normalised name is in `wanted`, by preference order."""
+    by = {}
+    for f in fields:
+        by.setdefault(_norm(f), f)
+    for w in wanted:
+        if w in by:
+            return by[w]
+    return None
+
+
+def _crs_of(text):
+    """EPSG code named in a CRS string ('urn:ogc:def:crs:EPSG::29902', 'EPSG:2157', 'CRS84'), else None."""
+    if not text:
+        return None
+    t = str(text).upper()
+    if "CRS84" in t:
+        return 4326
+    m = re.search(r"EPSG[^0-9]*(\d{4,5})", t)
+    return int(m.group(1)) if m else None
+
+
+def _classify(x, y):
+    """CRS of one point from its magnitude when the file does not say. NI in Irish Grid is about
+    E 180-370 km, N 310-460 km; in Irish Transverse Mercator about E 630-740 km, N 800-980 km."""
+    if abs(x) <= 180 and abs(y) <= 90:
+        return 4326
+    return 2157 if y > 600_000 else 29902
+
+
+def _float(v):
+    try:
+        f = float(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
+def _point(geom):
+    """A representative coordinate for a GeoJSON geometry: the point, or the middle vertex."""
+    if not isinstance(geom, dict):
+        return None
+    if geom.get("type") == "GeometryCollection":
+        for g in geom.get("geometries") or []:
+            p = _point(g)
+            if p:
+                return p
+        return None
+    flat = []
+
+    def walk(c):
+        if isinstance(c, (list, tuple)) and len(c) >= 2 and all(isinstance(v, (int, float)) for v in c[:2]):
+            flat.append((float(c[0]), float(c[1])))
+        elif isinstance(c, (list, tuple)):
+            for v in c:
+                walk(v)
+    walk(geom.get("coordinates"))
+    return flat[len(flat) // 2] if flat else None
+
+
+def read_osni(path, kind):
+    """Rows {name, area, type_word, x, y, crs} from an OSNI CSV or GeoJSON (crs None = detect per point).
+    Raises OsniError when no name column or no coordinates can be found."""
+    with open(path, "rb") as f:
+        head = f.read(4096).lstrip(b"\xef\xbb\xbf").lstrip()
+    out = []
+    if head[:1] in (b"{", b"["):
+        with open(path, encoding="utf-8-sig") as f:
+            data = json.load(f)
+        feats = data.get("features") if isinstance(data, dict) else None
+        if not isinstance(feats, list):
+            raise OsniError(f"{path}: GeoJSON has no features list")
+        declared = _crs_of(((data.get("crs") or {}).get("properties") or {}).get("name"))
+        fields = []
+        for ft in feats[:500]:
+            for k in ((ft or {}).get("properties") or {}):
+                if k not in fields:
+                    fields.append(k)
+        name_col = _pick(fields, OSNI_NAME_COLS[kind])
+        if not name_col:
+            raise OsniError(f"{path}: no {kind} name property found (have: {', '.join(fields[:20]) or 'none'})")
+        x_col, y_col = _pick(fields, OSNI_X_COLS), _pick(fields, OSNI_Y_COLS)
+        if feats and not (x_col and y_col) and not any(_point((ft or {}).get("geometry")) for ft in feats[:500]):
+            raise OsniError(f"{path}: features have no geometry and no X/Y properties")
+        records = []
+        for ft in feats:
+            props = (ft or {}).get("properties") or {}
+            p, crs = _point((ft or {}).get("geometry")), declared
+            if p is None and x_col and y_col:
+                p, crs = (_float(props.get(x_col)), _float(props.get(y_col))), None
+            records.append((props, p, crs))
+    else:
+        with open(path, encoding="utf-8-sig", errors="replace", newline="") as f:
+            reader = csv.DictReader(f)
+            fields = reader.fieldnames or []
+            name_col = _pick(fields, OSNI_NAME_COLS[kind])
+            if not name_col:
+                raise OsniError(f"{path}: no {kind} name column found (have: {', '.join(fields[:20]) or 'none'})")
+            x_col, y_col, crs = _pick(fields, OSNI_X_COLS), _pick(fields, OSNI_Y_COLS), None
+            if not (x_col and y_col):
+                x_col, y_col, crs = _pick(fields, OSNI_LON_COLS), _pick(fields, OSNI_LAT_COLS), 4326
+            if not (x_col and y_col):
+                raise OsniError(f"{path}: no coordinate columns found (want X/Y, Easting/Northing or Lat/Lon; "
+                                f"have: {', '.join(fields[:20])})")
+            records = [(r, (_float(r.get(x_col)), _float(r.get(y_col))), crs) for r in reader]
+    area_col = _pick([f for f in fields if f != name_col], OSNI_AREA_COLS)
+    type_col = _pick([f for f in fields if f != name_col], OSNI_TYPE_COLS) if kind == "places" else None
+    for props, p, crs in records:
+        out.append({"name": props.get(name_col), "area": props.get(area_col) if area_col else "",
+                    "type_word": props.get(type_col) if type_col else "",
+                    "x": p[0] if p else None, "y": p[1] if p else None, "crs": crs})
+    return out
+
+
+def _transformers():
+    from pyproj import Transformer
+
+    cache = {}
+
+    def to_wgs(epsg, xs, ys):
+        if epsg not in cache:
+            cache[epsg] = Transformer.from_crs(f"EPSG:{epsg}", "EPSG:4326", always_xy=True).transform
+        return cache[epsg](xs, ys)
+    return to_wgs
+
+
+def _near(a, b):
+    """Rough metres test between two (lat, lon) points; plenty for a 50 m duplicate check."""
+    dy = (a[0] - b[0]) * 111_320
+    dx = (a[1] - b[1]) * 111_320 * math.cos(math.radians(a[0]))
+    return math.hypot(dx, dy) <= DEDUPE_METRES
+
+
+def _tidy(text):
+    return text.title() if text.isupper() else text
+
+
+def osni_lines(sources, existing, osni_to_wgs=None):
+    """Search lines for NI streets/places. `sources` is [(kind, path)]; `existing` maps (key, type) to the
+    (lat, lon) points already in the file near NI, so nothing is listed twice. Returns (lines, stats)."""
+    to_wgs = osni_to_wgs or _transformers()
+    stats = {"streets": 0, "places": 0, "outside_ni": 0, "no_name_or_point": 0, "duplicates": 0}
+    taken = {k: list(v) for k, v in existing.items()}
+    lines = []
+    for kind, path in sources:
+        rows = read_osni(path, kind)
+        groups = {}
+        for i, r in enumerate(rows):
+            name = clean(str(r["name"] or ""))
+            if not key_of(name) or r["x"] is None or r["y"] is None:
+                stats["no_name_or_point"] += 1
+                continue
+            x, y, crs = r["x"], r["y"], r["crs"]
+            if crs is None:
+                if 50 <= x <= 60 and -11 <= y <= 0:   # obviously lat/lon written the wrong way round
+                    x, y = y, x
+                crs = _classify(x, y)
+            groups.setdefault(crs, []).append((i, name, x, y))
+        points = {}
+        for crs, items in groups.items():
+            xs, ys = [it[2] for it in items], [it[3] for it in items]
+            lons, lats = (xs, ys) if crs == 4326 else to_wgs(crs, xs, ys)
+            for (i, name, _, _), lon, lat in zip(items, lons, lats):
+                points[i] = (name, lat, lon)
+        for i in sorted(points):
+            name, lat, lon = points[i]
+            if not (math.isfinite(lat) and math.isfinite(lon)
+                    and NI_LAT[0] <= lat <= NI_LAT[1] and NI_LON[0] <= lon <= NI_LON[1]):
+                stats["outside_ni"] += 1
+                continue
+            r = rows[i]
+            t = "R" if kind == "streets" else OSNI_PLACE_TYPES.get(_norm(r["type_word"] or ""), "O")
+            area = _tidy(clean(str(r["area"] or "")))
+            if not key_of(area) or key_of(area) == key_of(name):
+                area = "Northern Ireland"
+            key = key_of(name)
+            pt = (round(lat, 4), round(lon, 4))
+            if any(_near(pt, q) for q in taken.get((key, t), ())):
+                stats["duplicates"] += 1
+                continue
+            taken.setdefault((key, t), []).append(pt)
+            lines.append(f"{key}\t{t}\t{_tidy(name)}\t{area}\t{lat:.4f}\t{lon:.4f}")
+            stats[kind] += 1
+    return lines, stats
+
+
+def build(osnames_dir, dst, to_wgs=None, osni_streets=None, osni_places=None, osni_to_wgs=None):
     if to_wgs is None:
         from pyproj import Transformer
 
@@ -136,15 +368,34 @@ def build(osnames_dir, dst, to_wgs=None):
                 seen.add(ident)
                 lines.append(f"{key}\t{t}\t{name}\t{area}\t{lat:.4f}\t{lon:.4f}")
                 counts[t] = counts.get(t, 0) + 1
+    sources = [(k, p) for k, p in (("streets", osni_streets), ("places", osni_places)) if p]
+    osni_stats = None
+    credits = CREDITS
+    if sources:
+        near_ni = {}
+        for line in lines:
+            key, t, _, _, lat, lon = line.split("\t")
+            if NI_LAT[0] - 0.1 <= float(lat) <= NI_LAT[1] + 0.1 and NI_LON[0] - 0.1 <= float(lon) <= NI_LON[1] + 0.1:
+                near_ni.setdefault((key, t), []).append((float(lat), float(lon)))
+        extra, osni_stats = osni_lines(sources, near_ni, osni_to_wgs)
+        lines.extend(extra)
+        for line in extra:
+            t = line.split("\t")[1]
+            counts[t] = counts.get(t, 0) + 1
+        if extra:
+            credits = CREDITS + "; " + OSNI_CREDITS.format(year=time.gmtime().tm_year)
     lines.sort()
-    header = f"#drivemate-search-offline\t1\t{time.strftime('%Y-%m-%d', time.gmtime())}\t{CREDITS}"
+    header = f"#drivemate-search-offline\t1\t{time.strftime('%Y-%m-%d', time.gmtime())}\t{credits}"
     tmp = dst + ".tmp"
     with gzip.open(tmp, "wt", encoding="utf-8", compresslevel=9, newline="\n") as f:
         f.write(header + "\n")
         for line in lines:
             f.write(line + "\n")
     os.replace(tmp, dst)
-    return {"records": len(lines), "by_type": counts, "bytes": os.path.getsize(dst)}
+    stats = {"records": len(lines), "by_type": counts, "bytes": os.path.getsize(dst)}
+    if osni_stats is not None:
+        stats["osni"] = osni_stats
+    return stats
 
 
 def selftest():
@@ -200,17 +451,45 @@ def selftest():
     assert 53 < lat < 54 and -2.5 < lon < -1.5, (lat, lon)
     assert key_of("Pen-y-Ŵal") == "pen y wal" and key_of("sk8 2ez", postcode=True) == "sk82ez"
     assert st["records"] == len(recs) == 7, st
+    assert "LPS" not in lines[0]
+    # Northern Ireland: OSNI street gazetteer in Irish Grid (EPSG:29902), converted with pyproj.
+    streets = os.path.join(tmp, "osni_streets.csv")
+    with open(streets, "w", encoding="utf-8-sig", newline="") as f:
+        csv.writer(f).writerows([["STREETNAME", "TOWN", "X", "Y"],
+                                 ["DONEGALL SQUARE NORTH", "BELFAST", "333900", "374000"],   # Belfast City Hall
+                                 ["Donegall Square North", "Belfast", "333920", "374010"],   # same street within 50 m
+                                 ["Nowhere Road", "", "100000", "100000"]])                    # outside Northern Ireland
+    st = build(tmp, out, rough, osni_streets=streets)
+    with gzip.open(out, "rt", encoding="utf-8") as f:
+        lines = f.read().split("\n")
+    assert "Contains LPS Intellectual Property" in lines[0] and "Royal Mail" in lines[0], lines[0]
+    ni = [l.split("\t") for l in lines[1:] if l.startswith("donegall square north")]
+    assert len(ni) == 1 and ni[0][1:4] == ["R", "Donegall Square North", "Belfast"], ni
+    assert abs(float(ni[0][4]) - 54.596) < 0.001 and abs(float(ni[0][5]) + 5.930) < 0.0015, ni
+    assert st["osni"]["outside_ni"] == 1 and st["osni"]["duplicates"] == 1 and st["records"] == 8, st
+    assert not any(l.split("\t")[1] == "P" and l.startswith("bt") for l in lines[1:] if l)
     print("selftest ok")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Build the offline postcode, street and place search file.")
+    parser.add_argument("osnames_dir")
+    parser.add_argument("output")
+    parser.add_argument("--osni-streets", help="OSNI Open Data Gazetteer - Streetnames (CSV or GeoJSON)")
+    parser.add_argument("--osni-places", help="OSNI Open Data Gazetteer - Place Names (CSV or GeoJSON)")
+    args = parser.parse_args(argv)
+    try:
+        stats = build(args.osnames_dir, args.output, osni_streets=args.osni_streets, osni_places=args.osni_places)
+    except OsniError as error:
+        raise SystemExit(f"OSNI gazetteer not usable: {error}")
+    print(json.dumps(stats))
+    # A real build has well over two million lines (1.7 million postcodes alone) and tens of MB.
+    if stats["records"] < int(os.environ.get("SEARCH_MIN_RECORDS", "1000000")) or stats["bytes"] < 5_000_000:
+        raise SystemExit("::error::offline search file is far too small - build failed")
 
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["--selftest"]:
         selftest()
     else:
-        stats = build(sys.argv[1], sys.argv[2])
-        import json
-
-        print(json.dumps(stats))
-        # A real build has well over two million lines (1.7 million postcodes alone) and tens of MB.
-        if stats["records"] < int(os.environ.get("SEARCH_MIN_RECORDS", "1000000")) or stats["bytes"] < 5_000_000:
-            raise SystemExit("::error::offline search file is far too small - build failed")
+        main()

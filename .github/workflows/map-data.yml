@@ -359,12 +359,58 @@ jobs:
 
       - name: Offline postcode and place search (OS Open Names), one file for the phone
         run: |
+          set -eo pipefail
           python3 scripts/search_offline.py --selftest
           # No OS Open Names this week (download failed above): keep last week's file in the release.
           if [ -z "$(find work/osnames -name '*.csv' 2>/dev/null | head -1)" ]; then
             echo "::warning::No OS Open Names: offline search file not rebuilt this week"; exit 0
           fi
-          python3 scripts/search_offline.py work/osnames out/search-offline-uk.tsv.gz | tee -a out/build-info.txt
+          # Northern Ireland streets and towns: OSNI Open Data Gazetteers (LPS, Open Government Licence).
+          # Best effort only: the resource URL is looked up in the OpenDataNI CKAN API, then the
+          # data.gov.uk mirror; any failure builds without NI and never fails this step.
+          # NI postcodes (ONSPD/NSPL BT rows) must not be bundled, so none are fetched.
+          osni_url() {
+            local id api url
+            for id in "$@"; do
+              for api in "https://admin.opendatani.gov.uk/api/3/action/package_show?id=$id" \
+                         "https://ckan.publishing.service.gov.uk/api/action/package_show?id=$id"; do
+                url=$(curl -sSfL --max-time 60 "$api" 2>/dev/null | jq -r '
+                  [.result.resources[]? | select((.format // "" | ascii_upcase) == "CSV")][0].url
+                  // [.result.resources[]? | select((.format // "" | ascii_upcase) == "GEOJSON")][0].url
+                  // empty' 2>/dev/null) || url=""
+                if [ -n "$url" ]; then echo "$url"; return 0; fi
+              done
+            done
+            return 1
+          }
+          osni_fetch() {   # $1 = output stem, rest = dataset ids
+            local stem=$1 url ext; shift
+            url=$(osni_url "$@") || { echo "::warning::OSNI $stem: no download URL from OpenDataNI or data.gov.uk" >&2; return 1; }
+            case "$url" in *.geojson|*.json|*geojson*) ext=geojson ;; *) ext=csv ;; esac
+            if curl -sSfL --retry 2 --max-time 600 -o "work/osni/$stem.$ext" "$url" \
+               && [ -s "work/osni/$stem.$ext" ] && [ "$(head -c 1 "work/osni/$stem.$ext")" != "<" ]; then
+              echo "work/osni/$stem.$ext"
+            else
+              echo "::warning::OSNI $stem download failed ($url)" >&2; rm -f "work/osni/$stem.$ext"; return 1
+            fi
+          }
+          mkdir -p work/osni
+          osni_args=()
+          if f=$(osni_fetch streets osni-open-data-gazetteer-streetnames osni-opendata-gazetteer-streetnames); then
+            osni_args+=(--osni-streets "$f")
+          fi
+          if f=$(osni_fetch places osni-open-data-gazetteer-place-names osni-open-data-gazetteer-place-names7); then
+            osni_args+=(--osni-places "$f")
+          fi
+          if [ ${#osni_args[@]} -gt 0 ] && python3 scripts/search_offline.py work/osnames out/search-offline-uk.tsv.gz \
+               "${osni_args[@]}" > work/search-offline-stats.json; then
+            echo "Offline search includes Northern Ireland (OSNI gazetteer): $(jq -c '.osni' work/search-offline-stats.json)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            [ ${#osni_args[@]} -gt 0 ] && echo "::warning::OSNI gazetteer not usable: offline search built without Northern Ireland"
+            [ ${#osni_args[@]} -gt 0 ] || echo "::warning::OSNI gazetteer not downloaded: offline search built without Northern Ireland"
+            python3 scripts/search_offline.py work/osnames out/search-offline-uk.tsv.gz > work/search-offline-stats.json
+          fi
+          tee -a out/build-info.txt < work/search-offline-stats.json
           ls -lh out/search-offline-uk.tsv.gz
           echo "Offline search: $(du -h out/search-offline-uk.tsv.gz | cut -f1) ($(zcat out/search-offline-uk.tsv.gz | wc -l) lines)" >> "$GITHUB_STEP_SUMMARY"
 

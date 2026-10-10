@@ -85,3 +85,13 @@ LPS licence (January 2026) was seen only on a secondary site.
 Recommended next step: add the OSNI street and place gazetteers to offline search
 (converting Irish Grid EPSG:29902/29903 to WGS84), keeping their attribution.
 Do this once a GitHub runner can download them.
+
+**Status (10 October 2026): wired in.** `scripts/search_offline.py --osni-streets/--osni-places`
+adds NI streets (type R) and towns/villages (C/T/V/H, or O when untyped) to
+`search-offline-uk.tsv.gz`, with no postcodes, and appends the LPS/OGL attribution
+above to the file's credits only when OSNI records are present. The weekly workflow
+looks up the CSV/GeoJSON URL from the OpenDataNI CKAN API (falling back to the
+data.gov.uk mirror) and builds without NI, with a warning, if the download fails.
+From the research machine the data.gov.uk API resolved the URLs but the
+`admin.opendatani.gov.uk` downloads returned 403, so the real field names are still
+UNVERIFIED; the reader detects name and coordinate columns and fails clearly if absent.
