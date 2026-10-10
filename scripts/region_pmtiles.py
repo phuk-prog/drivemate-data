@@ -136,8 +136,14 @@ def sha256(path):
     return h.hexdigest()
 
 
-def build(source, destination, max_bytes=DEFAULT_MAX_BYTES, pilot=None, dry_run=False):
-    """Write a standalone base and selected region or all regions, never publish."""
+def build(source, destination, max_bytes=DEFAULT_MAX_BYTES, pilot=None, dry_run=False,
+          available=None):
+    """Write a standalone base and selected region or all regions, never publish.
+
+    ``available`` optionally names the release's assets so that each detail
+    package's companion lane/limit/places squares list only real files.
+    """
+    from region_companions import annotate
     from pmtiles.reader import Reader
     from pmtiles.tile import TileType, Compression
     from pmtiles.writer import write
@@ -263,6 +269,7 @@ def build(source, destination, max_bytes=DEFAULT_MAX_BYTES, pilot=None, dry_run=
                 info["verified_tile_payloads"] = verified
                 info.update({"filename":path.name,"bytes":path.stat().st_size,"sha256":sha256(path)})
             inventory["packages"][name] = info
+        inventory = annotate(inventory, available)
         (destination / ("regional-plan.json" if dry_run else "regional-manifest.json")).write_text(
             json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return inventory
@@ -275,8 +282,16 @@ def main():
     p.add_argument("--max-bytes", type=int, default=DEFAULT_MAX_BYTES)
     p.add_argument("--pilot", help="Build only one z8 area, e.g. 8/126/82 for Manchester")
     p.add_argument("--plan-only", action="store_true")
+    p.add_argument("--release-manifest", type=Path,
+                   help="Release manifest.json; limits companion squares to published files")
     a = p.parse_args()
-    result = build(a.source, a.output, a.max_bytes, a.pilot, a.plan_only)
+    available = None
+    if a.release_manifest is not None:
+        files = json.loads(a.release_manifest.read_text(encoding="utf-8")).get("files")
+        if not isinstance(files, dict) or not files:
+            raise SystemExit("Release manifest has no files inventory")
+        available = set(files)
+    result = build(a.source, a.output, a.max_bytes, a.pilot, a.plan_only, available)
     print(f"{len(result['packages'])} candidate packages, pilot={a.pilot}, published=no")
 
 

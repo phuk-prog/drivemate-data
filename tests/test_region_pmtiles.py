@@ -90,6 +90,12 @@ class RegionPartitionTests(unittest.TestCase):
             self.assertEqual(3,manifest["packages"]["region-z8-x126-y82"]["verified_tile_payloads"])
             self.assertEqual(2,manifest["packages"]["base"]["verified_tile_payloads"])
             self.assertEqual(6,manifest["source_addressed_tiles"])
+            # Offline companions for the region are listed; base has none.
+            companions=manifest["packages"]["region-z8-x126-y82"]["companions"]
+            self.assertIn("lanes-106_-5.json",companions["lanes"])
+            self.assertIn("places-213_-9.json.gz",companions["places"])
+            self.assertNotIn("companions",manifest["packages"]["base"])
+            self.assertIn("cameras-uk.json",manifest["national_files"])
             self.assertEqual(5,manifest["selected_addressed_tiles"])
 
     def test_zoom9_is_base_only_when_region_subdivides(self):

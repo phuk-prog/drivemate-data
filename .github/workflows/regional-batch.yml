@@ -19,7 +19,7 @@ jobs:
   batch:
     if: github.ref == 'refs/heads/codex/architecture-foundation'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 300
     env:
       GH_TOKEN: ${{ github.token }}
       EXPECTED_SHA: 8ec2a5cd5e4373a5d75243c1aa46ccb40adb3a8dd9b821f06a3b2c765f9cf069
@@ -62,59 +62,75 @@ jobs:
             --pattern drivemate.pmtiles --dir work/source
           test "$(stat -c %s work/source/drivemate.pmtiles)" = "$EXPECTED_BYTES"
           echo "$EXPECTED_SHA  work/source/drivemate.pmtiles" | sha256sum --check --strict
-      - name: Choose exactly one uncompleted z8 root
+      - name: Plan the UK partition once
         if: steps.permission.outputs.enabled == 'true'
-        id: selection
         run: |
           set -euo pipefail
           python3 scripts/region_pmtiles.py --source work/source/drivemate.pmtiles \
             --output work/all-plan --plan-only
-          python3 scripts/region_batch_queue.py next \
-            --plan work/all-plan/regional-plan.json \
-            --ledger docs/regional-batch-ledger.json \
-            --request docs/regional-batch-request.json \
-            --output work/queue/selection.json
-          python3 - <<'PY'
-          import json,os
-          from pathlib import Path
-          data=json.loads(Path('work/queue/selection.json').read_text())
-          with open(os.environ['GITHUB_OUTPUT'],'a') as o:
-              o.write(f"has_work={str(data['status']=='selected').lower()}\n")
-              if data['status']=='selected': o.write(f"region={data['root']}\n")
-          PY
-      - name: Export and validate one verified UK region
-        if: steps.selection.outputs.has_work == 'true'
+      - name: Verify and checkpoint regions one at a time within the approved budget
+        if: steps.permission.outputs.enabled == 'true'
         env:
-          ROOT: ${{ steps.selection.outputs.region }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Leave time for evidence upload before the job timeout; never start
+          # a region that might be cut off half way.
+          START_DEADLINE_SECONDS: '16200'
         run: |
           set -euo pipefail
-          python3 scripts/region_pmtiles.py --source work/source/drivemate.pmtiles \
-            --output work/next-region --pilot "$ROOT"
-          mkdir -p work/evidence
-          for archive in work/next-region/*.pmtiles; do
-            name="$(basename "$archive" .pmtiles)"
-            python3 scripts/verify_pmtiles.py "$archive" "work/evidence/${name}.json"
-          done
-          python3 scripts/region_batch_queue.py complete \
-            --selection work/queue/selection.json \
-            --manifest work/next-region/regional-manifest.json \
-            --ledger docs/regional-batch-ledger.json \
-            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --output work/queue/updated-ledger.json
-      - name: Record passing batch without uploading map payloads
-        if: steps.selection.outputs.has_work == 'true'
-        env:
-          ROOT: ${{ steps.selection.outputs.region }}
-        run: |
-          set -euo pipefail
-          cp work/queue/updated-ledger.json docs/regional-batch-ledger.json
           git config user.name "DriveMate map verification"
           git config user.email "actions@users.noreply.github.com"
-          git add docs/regional-batch-ledger.json
-          git diff --cached --quiet && { echo "Nothing to checkpoint"; exit 1; }
-          git commit -m "Record validated UK regional root $ROOT"
-          # Never force a commit onto another author's newer changes.
-          git push origin HEAD:codex/architecture-foundation
+          started=$(date +%s)
+          budget=$(python3 scripts/region_batch_queue.py budget \
+            --ledger docs/regional-batch-ledger.json --request docs/regional-batch-request.json)
+          echo "This approved request may commit $budget more region(s)"
+          mkdir -p work/evidence
+          for n in $(seq 1 "$budget"); do
+            if [ $(( $(date +%s) - started )) -ge "$START_DEADLINE_SECONDS" ]; then
+              echo "Time budget reached; re-run this workflow to resume under the same request"
+              break
+            fi
+            python3 scripts/region_batch_queue.py next \
+              --plan work/all-plan/regional-plan.json \
+              --ledger docs/regional-batch-ledger.json \
+              --request docs/regional-batch-request.json \
+              --output "work/queue/selection-$n.json"
+            status=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["status"])' "work/queue/selection-$n.json")
+            if [ "$status" != selected ]; then
+              echo "No unverified regions remain ($status)"
+              break
+            fi
+            root=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["root"])' "work/queue/selection-$n.json")
+            out="work/region-$n"
+            echo "::group::Region $root"
+            python3 scripts/region_pmtiles.py --source work/source/drivemate.pmtiles \
+              --output "$out" --pilot "$root"
+            for archive in "$out"/*.pmtiles; do
+              name="$(basename "$archive" .pmtiles)"
+              python3 scripts/verify_pmtiles.py "$archive" "work/evidence/${n}-${name}.json"
+            done
+            cp "$out/regional-manifest.json" "work/evidence/${n}-regional-manifest.json"
+            python3 scripts/region_batch_queue.py complete \
+              --selection "work/queue/selection-$n.json" \
+              --manifest "$out/regional-manifest.json" \
+              --ledger docs/regional-batch-ledger.json \
+              --run-url "$RUN_URL" \
+              --output work/queue/updated-ledger.json
+            cp work/queue/updated-ledger.json docs/regional-batch-ledger.json
+            git add docs/regional-batch-ledger.json
+            git commit -m "Record validated UK regional root $root"
+            # Checkpoint immediately so an interrupted run resumes after this
+            # region. Never force; rebase only onto newer unrelated commits.
+            pushed=false
+            for attempt in 1 2 3 4; do
+              if git push origin HEAD:codex/architecture-foundation; then pushed=true; break; fi
+              sleep $(( 2 ** attempt ))
+              git pull --rebase origin codex/architecture-foundation
+            done
+            $pushed || { echo "Could not checkpoint $root"; exit 1; }
+            # Map payloads are never uploaded; free the disk for the next region.
+            rm -rf "$out"
+            echo "::endgroup::"
+          done
       - name: Retain lightweight evidence, not large map payloads
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -124,5 +140,4 @@ jobs:
           if-no-files-found: warn
           path: |
             work/queue/*.json
-            work/next-region/regional-manifest.json
             work/evidence/*.json

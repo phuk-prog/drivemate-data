@@ -14,6 +14,7 @@ SOURCE_SHA = "8ec2a5cd5e4373a5d75243c1aa46ccb40adb3a8dd9b821f06a3b2c765f9cf069"
 MANCHESTER = (126, 82)
 NAME = re.compile(r"region-z(8|9|10)-x([0-9]{1,4})-y([0-9]{1,4})\Z")
 SHA = re.compile(r"[0-9a-f]{64}\Z")
+MAX_ROOTS_PER_REQUEST = 200
 
 
 def region_root(name):
@@ -76,10 +77,7 @@ def next_region(plan, ledger, request=None):
     roots = validate_plan(plan)
     completed = validate_ledger(ledger, plan["source_sha256"], roots)
     if request is not None:
-        sequence = request.get("sequence")
-        if (request.get("schema") != 1 or request.get("enabled") is not True
-                or type(sequence) is not int or sequence <= ledger.get("last_sequence", 0)):
-            raise ValueError("Batch request disabled, repeated or malformed")
+        request_budget(request, ledger)
     remaining = [r for r in order_roots(roots) if r not in completed]
     if not remaining:
         return {
@@ -92,6 +90,7 @@ def next_region(plan, ledger, request=None):
         "root": root, "packages": roots[root],
         "all_roots": order_roots(roots),
         "sequence": request["sequence"] if request else None,
+        "max_roots": request.get("max_roots", 1) if request else None,
         "total_roots": len(roots), "completed_roots": len(completed),
         "remaining_roots": len(remaining),
     }
@@ -133,10 +132,51 @@ def mark_complete(selection, manifest, ledger, run_url):
     updated["completed"][selection["root"]] = proof
     sequence = selection.get("sequence")
     if sequence is not None:
-        if type(sequence) is not int or sequence <= ledger.get("last_sequence",0):
+        budget = selection.get("max_roots", 1)
+        if type(budget) is not int or not 1 <= budget <= MAX_ROOTS_PER_REQUEST:
+            raise ValueError("Invalid request budget in selection")
+        used = roots_used(ledger, sequence)
+        if type(sequence) is not int or used is None or used >= budget:
             raise ValueError("Repeated batch request")
         updated["last_sequence"] = sequence
+        updated["sequence_roots"] = used + 1
     return updated
+
+
+def roots_used(ledger, sequence):
+    """Roots already committed under ``sequence``; None if it is stale.
+
+    A ledger written before multi-root requests has no ``sequence_roots``;
+    its last sequence is treated as fully spent so it can never be replayed.
+    """
+    last = ledger.get("last_sequence", 0)
+    if type(sequence) is not int or sequence < last:
+        return None
+    if sequence > last:
+        return 0
+    used = ledger.get("sequence_roots")
+    if type(used) is not int or used < 0:
+        return MAX_ROOTS_PER_REQUEST
+    return used
+
+
+def request_budget(request, ledger):
+    """Validate an enabled request; return how many more roots it may commit.
+
+    One approved request may verify up to ``max_roots`` regions (default 1),
+    each checkpointed separately, so an interrupted run resumes under the same
+    request without re-verifying committed regions or exceeding its budget.
+    """
+    sequence = request.get("sequence")
+    budget = request.get("max_roots", 1)
+    if (request.get("schema") != 1 or request.get("enabled") is not True
+            or type(sequence) is not int or sequence < 1
+            or type(budget) is not int or not 1 <= budget <= MAX_ROOTS_PER_REQUEST):
+        raise ValueError("Batch request disabled, repeated or malformed")
+    used = roots_used(ledger, sequence)
+    if used is None or used >= budget:
+        raise ValueError("Batch request disabled, repeated or malformed")
+    return budget - used
 
 
 def validate_plan_from_selection(selection):
@@ -179,7 +219,15 @@ def main():
     b.add_argument("--ledger", required=True)
     b.add_argument("--output", required=True)
     b.add_argument("--run-url", required=True)
+    c = cmds.add_parser("budget", help="Print how many more roots the request may commit")
+    c.add_argument("--ledger", required=True)
+    c.add_argument("--request", required=True)
     args = parser.parse_args()
+    if args.command == "budget":
+        ledger = json.loads(Path(args.ledger).read_text())
+        request = json.loads(Path(args.request).read_text())
+        print(request_budget(request, ledger))
+        return
     if args.command == "next":
         plan = json.loads(Path(args.plan).read_text())
         ledger = json.loads(Path(args.ledger).read_text())

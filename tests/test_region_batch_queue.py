@@ -5,7 +5,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from region_batch_queue import SOURCE_SHA, region_root, next_region, mark_complete
+from region_batch_queue import SOURCE_SHA, region_root, next_region, mark_complete, request_budget
 
 RUN = "https://github.com/phuk-prog/drivemate-data/actions/runs/38031100907"
 
@@ -90,6 +90,50 @@ class RegionQueueTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             next_region(plan,ledger)
 
+    def _manifest(self, sel):
+        def info(i):
+            return {"tiles": 2, "verified_tile_payloads": 2, "bytes": 1000,
+                    "sha256": format(i + 1, "064x")}
+        return {"schema": 1, "status": "pilot_unpublished", "source_sha256": SOURCE_SHA,
+                "pilot_root": sel["root"], "base_zoom_max": 9, "detail_zoom_min": 10,
+                "packages": {n: info(i) for i, n in enumerate(["base", *sel["packages"]])}}
+
+    def test_one_request_checkpoints_several_roots_then_stops(self):
+        plan, ledger = fixture()
+        req = {"schema": 1, "enabled": True, "sequence": 1, "max_roots": 2}
+        self.assertEqual(2, request_budget(req, ledger))
+        sel = next_region(plan, ledger, req)
+        ledger = mark_complete(sel, self._manifest(sel), ledger, RUN)
+        self.assertEqual((1, 1), (ledger["last_sequence"], ledger["sequence_roots"]))
+        # An interrupted run replays the same request and resumes, not repeats.
+        self.assertEqual(1, request_budget(req, ledger))
+        sel2 = next_region(plan, ledger, req)
+        self.assertNotEqual(sel["root"], sel2["root"])
+        ledger = mark_complete(sel2, self._manifest(sel2), ledger, RUN)
+        self.assertEqual(2, ledger["sequence_roots"])
+        with self.assertRaises(ValueError):
+            request_budget(req, ledger)
+        # A new approval is required to continue.
+        self.assertEqual(1, request_budget({"schema": 1, "enabled": True, "sequence": 2}, ledger))
+
+    def test_budget_cannot_be_exceeded_with_stale_selection(self):
+        plan, ledger = fixture()
+        req = {"schema": 1, "enabled": True, "sequence": 4, "max_roots": 1}
+        sel = next_region(plan, ledger, req)
+        done = mark_complete(sel, self._manifest(sel), ledger, RUN)
+        del done["completed"][sel["root"]]  # even a tampered ledger keeps the count
+        with self.assertRaises(ValueError):
+            mark_complete(sel, self._manifest(sel), done, RUN)
+
+    def test_malformed_budgets_rejected(self):
+        _, ledger = fixture()
+        for bad in (0, 201, "3", 2.0, True):
+            with self.assertRaises(ValueError):
+                request_budget({"schema": 1, "enabled": True, "sequence": 1, "max_roots": bad}, ledger)
+        with self.assertRaises(ValueError):
+            request_budget({"schema": 1, "enabled": False, "sequence": 1}, ledger)
+        with self.assertRaises(ValueError):
+            request_budget({"schema": 1, "enabled": True, "sequence": 0}, ledger)
 
 if __name__=="__main__":
     unittest.main()
