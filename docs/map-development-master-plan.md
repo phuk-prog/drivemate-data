@@ -31,7 +31,7 @@ Development stays on `codex/architecture-foundation`, existing draft PR #3 in ea
 | Run source/unit tests | Verified | Canonical preflight passes at base `e5fba6b`: 85 unit tests, zero failures/errors/skips, all five generator selftests, source scan and ancestor/workflow gates pass |
 | Nonpublishing full-build mode | Verified | Manual `validate_only` defaults true and gates both publishers; local regression passes. Source CI passed at `50906eb` (run 38027404597); real build pending |
 | Preserve house numbers | Verified | Oversized PMTiles now stops instead of excluding housenumber layer; source CI passed at `50906eb`. Regional packaging still pending, no consumer format changed |
-| Verify source rights and lineage | Blocked | `source_inventory.py` records declarations, not clearance; optional origins and Planetiler ancillary sources absent. Overture upstream terms and Mapillary derived observations require review; README claims corrected; primary-source findings recorded in `docs/source-rights-review.md` |
+| Verify source rights and lineage | Blocked | `source_inventory.py` records declarations, not clearance; historical release lineage is absent. Current code fingerprints Planetiler ancillary archives, but this is not rights clearance. Overture upstream terms and Mapillary derived observations require review; README claims corrected; primary-source findings recorded in `docs/source-rights-review.md` |
 | Validate actual complete UK map | In progress | All 999 current manifest assets downloaded and SHA/size verified. Four z14 map tiles decode with roads/buildings/house numbers. Full 780-place-archive audit reports six outside-envelope archives; current release lacks limits/roadinfo/search. See `docs/validation/` |
 | Validate routing graph and Android consumers | Testing | Current graph compressed and decoded SHA/size verified (2,800,936,960 bytes); four repeated benchmark routes and 11 extra UK journeys pass on pyvalhalla 3.6.3. PMTiles uses existing OpenMapTiles layers; five-field places preserved. Actual UK graph on Android remains unverified |
 | Coverage and search | Implemented | `coverage_audit.py`: four core and 19 additional probes plus place archive scan. `search_offline.py`: GB Open Names only; NI postcodes and individual postal addresses incomplete |
@@ -44,7 +44,7 @@ Next verify exact-SHA CI, complete source licensing/ancillary inventory and safe
 
 After local changes, all 85 unit tests pass (83 existing plus two workflow regressions). README now explicitly distinguishes preliminary declarations from legal clearance and imagery terms from derivative-data permissions. Canonical preflight now passes; generated-data checks remain outstanding.
 
-No stage is marked completed on source tests alone. No production publication, Android changes, APK, main merge or budget expenditure occurred in this session.
+No stage is marked completed on source tests alone. No production publication, release APK publication, main merge or budget expenditure occurred. Android consumer protection is now being tested separately on its existing development branch.
 
 ## Continuing Stage 1 — 10 October 2026
 
@@ -64,3 +64,9 @@ Current correction preflight target: 91 unit tests and five generator selftests.
 - Repeatable complete PMTiles verifier: Implemented, Verified locally against the current map. All 957,592 addresses, 221,293 physical contents and 23 city road-layer samples pass format checks. New corruption regressions cover truncated gzip, invalid MVT tag indices, forged counts and a tiny archive claiming UK coverage. Payload reports are bound to the final map fingerprint.
 - Android offline map replacement: Testing. Consumer inspection found size/header-only replacement in `MapPack.kt`; checksum-before-rename protection is being tested on the existing Android branch without activating unfinished data. Local SDK/JDK setup and trusted session CA configuration were required; no TLS bypass or native dependency change. Existing graph protections remain unchanged.
 - Local OS Open Names binary download: Blocked by HTTP 403 on `omseprd1stdstordownload.blob.core.windows.net`; API metadata is available. Do not call this archive retrieved or verified locally. GitHub-runner retrieval remains to be observed.
+
+## Current full-payload source verification
+
+- Data commit `e0b8216131d1dedc793877be326eb752085f2c4f` passed exact-source CI https://github.com/phuk-prog/drivemate-data/actions/runs/38029092446: 98 unit tests and five generator selftests.
+- The complete PMTiles audit covers 252,138 directory entries and 221,293 physical contents, not unique byte hashes. Sixteen physical blocks have identical bytes; this is permitted deduplication behavior, not evidence of corruption.
+- Android commit `4c4f8b9c55be31973f78f32c8bd9f30106edfbb0`: canonical preflight passed (293 JVM tests, zero failures/errors/skips, tooling gates, lint and robot test APK assembly). Exact-source CI https://github.com/phuk-prog/DriveMate/actions/runs/38029477016 is queued; device/robot results remain pending. Private replay unavailable; release readiness remains false. These do not establish nationwide driving legality or physical-device performance.
