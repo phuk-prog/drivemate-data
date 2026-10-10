@@ -142,6 +142,92 @@ class Flags(unittest.TestCase):
         self.assertEqual(rc.u_turns(node_route([1, 2, 4], idx)), [])
 
 
+class OsrmArtifactRegression(unittest.TestCase):
+    """False-positive patterns from the first real run (6,191 U-turns, 158 one-way flags)."""
+
+    LAT, LON = 53.4800, -2.2400
+    STEP = 0.00018  # about 20 m of latitude
+
+    def idx(self, extra=(), coords=None):
+        # One-way street A runs north, nodes 1..6 (node 3 is the junction with the two-way
+        # cross street C: 7 - 3 - 8, east-west). Two-way street B continues north from 6.
+        lines = [way(100, [1, 2, 3, 4, 5, 6], oneway="yes"),
+                 way(101, [7, 3, 8]), way(102, [6, 9, 10]), *extra]
+        c = {n: (self.LAT + self.STEP * (n - 1), self.LON) for n in range(1, 7)}
+        c[7] = (c[3][0], self.LON - 0.0003)
+        c[8] = (c[3][0], self.LON + 0.0003)
+        c[9] = (c[6][0] + self.STEP, self.LON)
+        c[10] = (c[6][0] + 2 * self.STEP, self.LON)
+        c.update(coords or {})
+        return rc.OsmIndex(ra.load_ways(lines), [], c)
+
+    def test_shared_junction_node_and_two_way_street_crossing_a_one_way(self):
+        idx = self.idx()
+        for nodes in ([7, 3, 8], [8, 3, 7], [1, 2, 3, 4, 5, 6], [1, 2, 3, 8], [7, 3, 4, 5, 6, 9, 10]):
+            route = node_route(nodes, idx)
+            self.assertEqual(rc.oneway_violations(route, idx), [], nodes)
+            self.assertEqual(rc.u_turns(route), [], nodes)
+            self.assertEqual(route.segments and all(s.way_id is not None for s in route.segments), True)
+
+    def test_true_one_way_violation_still_flagged_by_pair_direction(self):
+        idx = self.idx()
+        found = rc.oneway_violations(node_route([6, 5, 4], idx), idx)
+        self.assertEqual([f["way"] for f in found], [100])
+        # Joining the one-way against its direction from the cross street, via the shared node.
+        found = rc.oneway_violations(node_route([7, 3, 2, 1], idx), idx)
+        self.assertEqual([f["way"] for f in found], [100])
+
+    def test_non_adjacent_pair_is_unmapped_not_a_violation(self):
+        idx = self.idx()
+        route = node_route([5, 3], idx)  # skips node 4: not an edge of any way
+        self.assertIsNone(route.segments[0].way_id)
+        self.assertEqual(rc.oneway_violations(route, idx), [])
+        self.assertEqual(rc.u_turns(route), [])
+
+    def test_pair_shared_by_a_two_way_way_is_allowed(self):
+        idx = self.idx(extra=[way(103, [4, 5])])  # a two-way way over the same pair
+        self.assertEqual(rc.oneway_violations(node_route([5, 4], idx), idx), [])
+
+    def test_duplicate_consecutive_nodes_ignored(self):
+        idx = self.idx()
+        route = node_route([1, 2, 2, 2, 3, 3, 4], idx)
+        self.assertEqual(len(route.segments), 3)
+        self.assertEqual(rc.oneway_violations(route, idx), [])
+        self.assertEqual(rc.u_turns(route), [])
+
+    def test_duplicate_points_with_distinct_ids_have_no_heading(self):
+        # Two node ids at the same place (e.g. a split way) must not look like a reversal.
+        idx = self.idx(coords={3: (self.LAT + self.STEP * 2, self.LON)})
+        idx.coords[11] = idx.coords[3]
+        idx.ways[100] = (idx.ways[100][0], [1, 2, 3, 11, 4, 5, 6])
+        route = node_route([1, 2, 3, 11, 4, 5, 6], idx)
+        self.assertEqual(rc.u_turns(route), [])
+
+    def test_short_zigzag_segments_are_not_u_turns(self):
+        zig = self.STEP * 0.1  # about 2 m
+        coords = {2: (self.LAT + self.STEP, self.LON), 3: (self.LAT + self.STEP + zig, self.LON),
+                  4: (self.LAT + self.STEP, self.LON), 5: (self.LAT + self.STEP + zig, self.LON),
+                  6: (self.LAT + self.STEP * 2, self.LON)}
+        idx = self.idx(coords=coords)
+        route = node_route([1, 2, 3, 4, 5, 6], idx)
+        self.assertEqual(rc.u_turns(route), [])
+
+    def test_true_u_turn_over_long_segments_still_flagged_once(self):
+        idx = self.idx(extra=[way(104, [4, 12], highway="residential")],
+                       coords={12: (self.LAT + self.STEP * 3, self.LON + 0.0003)})
+        flags = rc.u_turns(node_route([1, 2, 3, 4, 3, 2, 1], idx))
+        self.assertEqual(len(flags), 1)
+        self.assertGreaterEqual(flags[0]["angle"], 150.0)
+
+    def test_valhalla_tiny_edge_does_not_make_a_u_turn(self):
+        idx = self.idx()
+        c = idx.coords
+        tiny = (c[3][0], c[3][1] + 0.00001)  # about 0.7 m sideways stub
+        segs = [rc.Segment(100, c[1], c[3], 0.0, 0.0), rc.Segment(101, c[3], tiny, 90.0, 90.0),
+                rc.Segment(100, tiny, c[6], 0.0, 0.0)]
+        self.assertEqual(rc.u_turns(rc.Route(100.0, 10.0, segs)), [])
+
+
 class Journeys(unittest.TestCase):
     def test_deterministic_and_banded(self):
         a = rc.generate_journeys(30, seed=7)

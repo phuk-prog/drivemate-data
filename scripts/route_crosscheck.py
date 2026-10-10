@@ -47,6 +47,11 @@ BANDS = {"short": (0.5, 3.0), "medium": (3.0, 15.0), "long": (15.0, 40.0)}
 UTURN_DEGREES = 150.0
 APPROACH_TOLERANCE = 60.0
 MIN_DIRECTION_METRES = 2.0
+# A heading is only trusted over a stretch at least this long; shorter hops (duplicate or
+# near-duplicate points, zigzags between neighbouring nodes) are noise, not driving direction.
+UTURN_WINDOW_METRES = 15.0
+UTURN_MIN_CHORD_METRES = 10.0
+UTURN_MERGE_METRES = 30.0
 VIA_HINT_METRES = 400.0
 
 # Fixed journeys from the user's reported drives. Coordinates other than SK8 2EZ are
@@ -101,6 +106,9 @@ class Segment:
     end_heading: float = None
     start_node: int = None
     end_node: int = None
+    # Node-pair routes only: (way, directions) for every way holding this pair as two consecutive
+    # nodes. ``directions`` are FORWARD/BACKWARD: how the way's node order is walked start -> end.
+    candidates: tuple = ()
 
 
 @dataclass
@@ -189,9 +197,14 @@ class OsmIndex:
     def __init__(self, ways, relations, coords):
         self.ways, self.coords = ways, coords
         self.pairs = {}
+        self.edges = {}  # (u, v) -> {way: {FORWARD/BACKWARD as walked u -> v}}, both orders stored
         for wid, (_, nodes) in ways.items():
             for u, v in zip(nodes, nodes[1:]):
+                if u == v:
+                    continue
                 self.pairs.setdefault((min(u, v), max(u, v)), wid)
+                self.edges.setdefault((u, v), {}).setdefault(wid, set()).add(ra.FORWARD)
+                self.edges.setdefault((v, u), {}).setdefault(wid, set()).add(ra.BACKWARD)
         self.restrictions = {}
         self.skipped = Counter()
         self.unsupported_relations = []
@@ -231,6 +244,10 @@ class OsmIndex:
 
     def way_for_pair(self, u, v):
         return self.pairs.get((min(u, v), max(u, v)))
+
+    def edge_ways(self, u, v):
+        """{way: directions walked going u -> v} for ways with u, v as consecutive nodes."""
+        return self.edges.get((u, v), {})
 
     def direction(self, seg):
         """FORWARD/BACKWARD along the way's node order, or None when it cannot be told."""
@@ -329,11 +346,24 @@ class OsrmRouter(Router):
 
 
 def segments_from_nodes(nodes, index):
-    segments = []
-    for u, v in zip(nodes, nodes[1:]):
+    """One Segment per consecutive node pair; a pair that is a real OSM edge gets its way(s).
+
+    Consecutive duplicate nodes are dropped. A pair that is not two consecutive nodes of any
+    indexed way is left unmapped (``way_id`` None) instead of being guessed. Where several ways
+    share the pair, the previous segment's way is kept if possible.
+    """
+    clean = [n for i, n in enumerate(nodes) if i == 0 or n != nodes[i - 1]]
+    segments, previous = [], None
+    for u, v in zip(clean, clean[1:]):
         a, b = index.coords.get(u), index.coords.get(v)
         heading = ra.bearing(a, b) if a and b and a != b else None
-        segments.append(Segment(index.way_for_pair(u, v), a, b, heading, heading, u, v))
+        found = index.edge_ways(u, v)
+        way_id, candidates = None, ()
+        if found:
+            candidates = tuple((w, frozenset(d)) for w, d in found.items())
+            way_id = previous if previous in found else candidates[0][0]
+        segments.append(Segment(way_id, a, b, heading, heading, u, v, candidates))
+        previous = way_id
     return segments
 
 
@@ -425,30 +455,92 @@ def restriction_violations(route, index):
     return found
 
 
+def _restricted(index, wid):
+    """Allowed directions when the way is a one-way, else None (two-way/unknown: never assumed)."""
+    allowed = ra.drivable_directions(index.ways[wid][0])
+    return allowed if allowed and len(allowed) == 1 else None
+
+
 def oneway_violations(route, index):
+    """Stretches driven against a one-way.
+
+    Node-pair routes (OSRM) are judged by the pair itself: it must be two consecutive nodes of
+    the way, walked opposite to the allowed direction, and no other way sharing that pair may
+    permit it. Shared junction nodes, crossings of unrelated ways and unmapped pairs never count.
+    """
     found, seen = [], set()
     for s in route.segments:
-        if s.way_id is None or s.way_id in seen or s.way_id not in index.ways:
+        if s.way_id is None or s.way_id not in index.ways:
             continue
-        allowed = ra.drivable_directions(index.ways[s.way_id][0])
-        if not allowed or len(allowed) == 2:
-            continue  # two-way, or reversible/unknown (never assumed either way)
-        d = index.direction(s)
-        if d is not None and d not in allowed:
-            seen.add(s.way_id)
-            found.append({"way": s.way_id, "oneway": index.ways[s.way_id][0].get("oneway", "implied"),
-                          "at": [round(s.start[0], 6), round(s.start[1], 6)] if s.start else None,
-                          "osm_url": f"https://www.openstreetmap.org/way/{s.way_id}"})
+        wid = None
+        if s.candidates:
+            for cand, directions in s.candidates:
+                allowed = _restricted(index, cand) if cand in index.ways else None
+                if allowed is None or directions & allowed:
+                    wid = None
+                    break
+                wid = wid or cand
+        else:
+            allowed = _restricted(index, s.way_id)
+            d = index.direction(s) if allowed is not None else None
+            if d is not None and d not in allowed:
+                wid = s.way_id
+        if wid is None or wid in seen:
+            continue
+        seen.add(wid)
+        found.append({"way": wid, "oneway": index.ways[wid][0].get("oneway", "implied"),
+                      "at": [round(s.start[0], 6), round(s.start[1], 6)] if s.start else None,
+                      "osm_url": f"https://www.openstreetmap.org/way/{wid}"})
     return found
 
 
+def _usable(seg):
+    """Both ends known and not an unmapped (non-edge) node pair."""
+    if seg.start is None or seg.end is None:
+        return False
+    return not (seg.way_id is None and seg.start_node is not None)
+
+
+def _chord_heading(segments, i, forward):
+    """Heading of the stretch (>= UTURN_WINDOW_METRES where possible) starting at segment i (forward)
+    or ending at segment i (backward)."""
+    junction = segments[i].start if forward else segments[i].end
+    far = None
+    for j in (range(i, len(segments)) if forward else range(i, -1, -1)):
+        seg = segments[j]
+        if not _usable(seg):
+            break
+        far = seg.end if forward else seg.start
+        if ra.haversine(junction, far) >= UTURN_WINDOW_METRES:
+            break
+    if far is None or ra.haversine(junction, far) < UTURN_MIN_CHORD_METRES:
+        return None
+    return ra.bearing(junction, far) if forward else ra.bearing(far, junction)
+
+
 def u_turns(route):
-    found = []
-    for a, b in zip(route.segments, route.segments[1:]):
-        angle = _turn_angle(a, b)
-        if angle is not None and angle >= UTURN_DEGREES and a.end is not None:
-            found.append({"at": [round(a.end[0], 6), round(a.end[1], 6)], "angle": round(angle, 1),
-                          "from_way": a.way_id, "to_way": b.way_id})
+    """Heading reversals measured over stretches of 10-15 m or more, never point to point.
+
+    Each side of a junction is the chord from the junction to a point about 15 m along the route
+    (or the longest available if at least 10 m), so duplicate points and tiny zigzags have no
+    heading and cannot produce a reversal. Nearby repeats of one reversal are merged.
+    """
+    segs, found, last = route.segments, [], None
+    for i in range(len(segs) - 1):
+        a, b = segs[i], segs[i + 1]
+        if not (_usable(a) and _usable(b)):
+            continue
+        before, after = _chord_heading(segs, i, False), _chord_heading(segs, i + 1, True)
+        if before is None or after is None:
+            continue
+        angle = ra.angle_between(before, after)
+        if angle < UTURN_DEGREES:
+            continue
+        if last is not None and ra.haversine(last, a.end) <= UTURN_MERGE_METRES:
+            continue
+        last = a.end
+        found.append({"at": [round(a.end[0], 6), round(a.end[1], 6)], "angle": round(angle, 1),
+                      "from_way": a.way_id, "to_way": b.way_id})
     return found
 
 
