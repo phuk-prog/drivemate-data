@@ -155,3 +155,24 @@ exports of Manchester are now byte-identical and pass the full verifier:
 A future publisher can now re-derive a region and get the hashes recorded
 in the ledger. A regression test re-exports at a different clock time and
 requires identical hashes.
+
+
+### Publication path (implemented, off by default) — 10 October 2026
+
+Every weekly or validation build now exports and fully verifies all regional
+packages from the map it has just built (about 3 minutes) and keeps the
+manifest and per-archive reports as evidence. **Staging for publication
+happens only when the repository variable `PUBLISH_REGIONAL_MAPS` is `true`.**
+That variable should be set only after the licensing and Manchester
+acceptance gates are approved.
+
+`scripts/region_publication.py` refuses pilots, partial exports, archives
+cut from a different map, and any archive whose size or SHA-256 changed since
+verification. It moves the set into `out/regions/` as
+`regional-base.pmtiles`, `region-z*-x*-y*.pmtiles` and a
+`regional-manifest.json` with status `published`. `publish_map_data.py`
+re-checks the whole staged set against that manifest and the release's
+`drivemate.pmtiles` before any upload. The phone trusts the regional
+manifest only through the release manifest's SHA-256, which `latest.json`
+pins. The full stage-and-validate path was run on the real UK archive:
+207 archives were staged and validated.

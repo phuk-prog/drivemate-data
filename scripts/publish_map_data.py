@@ -138,6 +138,17 @@ class GitHub:
         self.run('api', '-X', 'DELETE', f'repos/{self.repo}/releases/assets/{asset_id}')
 
 
+def _load(name):
+    # Import by path: publisher tests load this file as a standalone module.
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(name + '.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+regional = _load('region_publication')
+
+
 def local_files(out):
     out = Path(out)
     if not out.is_dir() or out.is_symlink():
@@ -157,11 +168,20 @@ def local_files(out):
                          'mapillary-arrows-cache.json.gz', 'mapillary-signs-cache.json.gz',
                          'source-inventory.json'} or
                 re.fullmatch(r'(?:lanes|limits|roadinfo)--?\d+_-?\d+\.json', name) or
-                re.fullmatch(r'places--?\d+_-?\d+\.json\.gz', name)):
+                re.fullmatch(r'places--?\d+_-?\d+\.json\.gz', name) or
+                regional.is_regional_asset(name)):
             raise ValueError('Unexpected map output file')
         size = path.stat().st_size
         if not 0 < size <= MAX_ASSET_BYTES:
             raise ValueError('Empty or oversized map asset')
+        if regional.is_regional_asset(name):
+            # Whole-set consistency is checked by validate_staged() below.
+            if name.endswith('.pmtiles'):
+                with path.open('rb') as stream:
+                    if stream.read(8) != b'PMTiles\x03':
+                        raise ValueError('Invalid regional map archive')
+            files[name] = path
+            continue
         if name == 'drivemate.pmtiles':
             with path.open('rb') as stream:
                 if size < MIN_MAP_BYTES or stream.read(7) != b'PMTiles':
@@ -206,6 +226,7 @@ def local_files(out):
         raise ValueError('Required map assets missing')
     if not any(name.startswith('lanes-') for name in files) or not any(name.startswith('places-') for name in files):
         raise ValueError('Lane or place tiles missing')
+    regional.validate_staged(files)
     return files
 
 

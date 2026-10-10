@@ -305,8 +305,16 @@ def main():
     p.add_argument("--plan-only", action="store_true")
     p.add_argument("--release-manifest", type=Path,
                    help="Release manifest.json; limits companion squares to published files")
+    p.add_argument("--available-dir", type=Path,
+                   help="Build output folder; limits companion squares to files it contains")
     a = p.parse_args()
     available = None
+    if a.release_manifest is not None and a.available_dir is not None:
+        raise SystemExit("Use either --release-manifest or --available-dir")
+    if a.available_dir is not None:
+        available = {f.name for f in a.available_dir.rglob("*") if f.is_file()}
+        if not available:
+            raise SystemExit("Build output folder is empty")
     if a.release_manifest is not None:
         files = json.loads(a.release_manifest.read_text(encoding="utf-8")).get("files")
         if not isinstance(files, dict) or not files:

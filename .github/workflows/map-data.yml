@@ -347,6 +347,28 @@ jobs:
           ls -lh out/search-offline-uk.tsv.gz
           echo "Offline search: $(du -h out/search-offline-uk.tsv.gz | cut -f1) ($(zcat out/search-offline-uk.tsv.gz | wc -l) lines)" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Regional map packages (nationwide z0-9 base + z10-14 regions), verified
+        env:
+          # Opt-in only after licensing and Manchester acceptance approval.
+          PUBLISH_REGIONAL_MAPS: ${{ vars.PUBLISH_REGIONAL_MAPS }}
+        run: |
+          set -euo pipefail
+          python3 scripts/region_pmtiles.py --source out/drivemate.pmtiles --output work/regions \
+            --available-dir out
+          mkdir -p work/region-validation
+          for archive in work/regions/*.pmtiles; do
+            python3 scripts/verify_pmtiles.py "$archive" "work/region-validation/$(basename "$archive" .pmtiles).json" > /dev/null
+          done
+          count=$(ls work/regions/*.pmtiles | wc -l)
+          echo "regional_packages=$count verified" | tee -a out/build-info.txt
+          if [ "${PUBLISH_REGIONAL_MAPS:-}" = "true" ]; then
+            python3 scripts/region_publication.py --regions work/regions --out out/regions --map out/drivemate.pmtiles
+          else
+            echo "Regional packages verified but not staged (PUBLISH_REGIONAL_MAPS is not true)"
+          fi
+          cp work/regions/regional-manifest.json work/region-validation/ 2>/dev/null || true
+          rm -rf work/regions
+
       - name: Record source fingerprints and rights-review status
         run: |
           python3 scripts/source_inventory.py --osm work/base.osm.pbf \
@@ -394,6 +416,7 @@ jobs:
             work/topology/*-report.json
             work/restrictions/*-report.json
             work/pmtiles-validation.json
+            work/region-validation/*.json
             build/reports/unified-preflight.json
 
   # Whole-UK road graph for routes worked out on the phone with no signal (Valhalla Mobile 0.6.3
