@@ -9,6 +9,10 @@ name: Build our own map data
 on:
   workflow_dispatch:
     inputs:
+      validate_only:
+        description: Build and validate without publishing or changing release pointers
+        type: boolean
+        default: true
       components:
         description: Build maps and routing, or routing only
         type: choice
@@ -80,12 +84,10 @@ jobs:
           java -Xmx12g -jar work/planetiler.jar --osm-path=work/base.osm.pbf --output=out/drivemate.pmtiles \
             --download --download-dir=work/sources --force 2>&1 | tail -n 25
           ls -lh out/drivemate.pmtiles
-          # GitHub allows 2 GB per file: if it's bigger, leave out house numbers (not needed while driving).
+          # Preserve house numbers. Oversized maps require compatible regional packaging.
           if [ $(stat -c %s out/drivemate.pmtiles) -gt 1950000000 ]; then
-            echo "Too big for one download; rebuilding without house numbers"
-            java -Xmx12g -jar work/planetiler.jar --osm-path=work/base.osm.pbf --output=out/drivemate.pmtiles \
-              --download-dir=work/sources --force --exclude_layers=housenumber 2>&1 | tail -n 5
-            ls -lh out/drivemate.pmtiles
+            echo "::error::Map exceeds the package size limit; regional packaging is required. House numbers retained."
+            exit 1
           fi
           echo "map_bytes=$(stat -c %s out/drivemate.pmtiles)" >> out/build-info.txt
           # A real UK map is hundreds of MB; a tiny file means the build failed.
@@ -335,6 +337,7 @@ jobs:
         run: python3 -m unittest discover -s tests -v
 
       - name: Publish a complete immutable generation, then update the pointer
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only == false
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -430,6 +433,7 @@ jobs:
           cat work/routing-connectivity.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish the road graph
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only == false
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

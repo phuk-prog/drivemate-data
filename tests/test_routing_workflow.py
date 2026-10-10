@@ -5,6 +5,26 @@ import yaml
 
 
 class RoutingWorkflowTest(unittest.TestCase):
+    def test_manual_build_defaults_to_no_publication(self):
+        path = Path(__file__).resolve().parents[1] / '.github/workflows/map-data.yml'
+        workflow = yaml.safe_load(path.read_text())
+        triggers = workflow.get('on', workflow.get(True))
+        self.assertIs(triggers['workflow_dispatch']['inputs']['validate_only']['default'], True)
+        for job in ('build', 'routing'):
+            publisher = next(step for step in workflow['jobs'][job]['steps']
+                             if step.get('name', '').startswith('Publish'))
+            self.assertEqual(publisher['if'],
+                             "github.event_name != 'workflow_dispatch' || inputs.validate_only == false")
+
+    def test_oversized_map_keeps_house_numbers_and_stops(self):
+        path = Path(__file__).resolve().parents[1] / '.github/workflows/map-data.yml'
+        workflow = yaml.safe_load(path.read_text())
+        generator = next(step['run'] for step in workflow['jobs']['build']['steps']
+                         if step.get('name', '').startswith('Our own map tiles'))
+        self.assertNotIn('--exclude_layers=housenumber', generator)
+        oversized = generator.split('-gt 1950000000 ]; then', 1)[1].split('fi', 1)[0]
+        self.assertIn('exit 1', oversized)
+
     def test_failed_graph_builder_pipeline_cannot_be_hidden_by_tail(self):
         path = Path(__file__).resolve().parents[1] / '.github/workflows/map-data.yml'
         workflow = yaml.safe_load(path.read_text())

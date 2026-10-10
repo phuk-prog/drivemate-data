@@ -28,11 +28,14 @@ build only after its pieces have uploaded and six test journeys across the UK ha
 Sources and licences:
 - © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/)
 - [Overture Maps](https://overturemaps.org) places (CDLA Permissive 2.0 / ODbL as published)
-- Painted lane arrows and speed-limit signs: [Mapillary](https://www.mapillary.com) contributors, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+- Painted lane arrows and speed-limit signs: [Mapillary](https://www.mapillary.com) contributors. Imagery licensing alone does not establish permission to redistribute API detections or derived routing data; applicable derivative-data terms require separate review.
 - Contains OS data © Crown copyright and database right (OS Open Names, Open Government Licence); Contains Royal Mail data © Royal Mail copyright and database right; Contains National Statistics data © Crown copyright and database right
 - Congestion Charge and ULEZ boundaries: contains Transport for London data (London Datastore, Open Government Licence v2)
 
-Only open data is published here.
+Source licence declarations are preliminary. `source-inventory.json` records observed
+files and fingerprints, not legal clearance or complete feature provenance. Optional
+upstream sources and Planetiler ancillary downloads still require review before new
+live publication. Open access alone does not establish redistribution rights.
 
 The app checks for a new generation daily while in use. Identical regional files stay
 cached; changed files are downloaded when needed and checked before replacing the
