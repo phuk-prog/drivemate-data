@@ -439,12 +439,18 @@ def judge_case(case, router):
             result["decoder"] = decoder
         results.append(result)
     statuses = [r["status"] for r in results]
+    # Every probe of the relation matters. Previously a single successful
+    # route could conceal an inconclusive or unroutable alternative exit.
+    # A relation only passes when *all* its probes have been examined and
+    # none violates the restriction; unresolved probes retain their status.
     if "fail" in statuses:
         overall = "fail"
-    elif "pass" in statuses:
-        overall = "pass"
+    elif "inconclusive" in statuses:
+        overall = "inconclusive"
     elif "no_route" in statuses:
         overall = "no_route"
+    elif statuses and all(s == "pass" for s in statuses):
+        overall = "pass"
     else:
         overall = "inconclusive"
     return overall, results
@@ -583,11 +589,15 @@ def run(ways, relations, coords_loader, router, region):
         "by_type": dict(sorted(by_type.items())),
         "failures": failures, "no_route_examples": examples["no_route"],
         "inconclusive_examples": examples["inconclusive"],
-        "accepted": counts.get("fail", 0) == 0,
+        # Supported-probe violations and known-unsupported OSM restrictions
+        # *both* keep this acceptance job red. Neither can safely be called
+        # accepted until the routing engine or a verified route guard fixes it.
+        "accepted": counts.get("fail", 0) == 0 and counts.get("engine_unsupported", 0) == 0,
         "known_routing_safety_blockers": counts.get("fail", 0) + counts.get("engine_unsupported", 0),
         "scope": ("Routing-engine compliance with simple node-via OSM restrictions for auto costing. "
                   "Detection only: no data is repaired, invented or uploaded."),
         "limitations": [
+            "Accepted means no detected violations or known unsupported restrictions; skipped, no_route and inconclusive cases still require independent safety review.",
             "Assumes the OSM relation is correct; does not verify signage or ground truth.",
             "Conditional, timed, vehicle-specific, way-via and flagged relations are skipped, not tested.",
             "A pass covers only the probed approach and destinations, not every possible route.",

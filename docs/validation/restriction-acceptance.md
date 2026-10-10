@@ -101,9 +101,11 @@ gap between OSM and the engine, to be reviewed by a human. It is not a data repa
 Valhalla 3.6.3's tile builder does not recognise `only_u_turn`, so those
 relations are not enforced and routes may ignore them. They are a real
 navigation risk. The check reports them under a separate status,
-`engine_unsupported`, with full relation links in the JSON and the job summary,
-instead of failing every run. A permanently red check would hide any new,
-unexpected failure. Every other failing restriction still rejects the run.
+`engine_unsupported`, with full relation links in the JSON and the job summary.
+They now **also fail the acceptance gate**: allowing a green job while known
+unsupported restrictions remain would be unsafe. New violations still appear
+separately in the failing-relation list, so an existing blocker does not mask
+their details.
 Fixing this needs either a Valhalla release that supports `only_u_turn` or an
 app-side guard; both are outstanding.
 
@@ -133,7 +135,7 @@ in street photos and accept it, or add an app-side guard. Nothing was changed.
 
 ## Safety gate: known engine defects never counted as resolved
 
-The machine-readable report now includes known_routing_safety_blockers, the sum of confirmed failed probes and unsupported engine restriction types. The existing limited-scope `accepted` field still means zero detected probe failures, but it is not a production release certificate: unsupported `only_u_turn` cases remain safety blockers even on a green probe run. Skipped and inconclusive restrictions also need separate evidence. The r14551046 prohibited left turn remains a confirmed failing case pending an actual supported routing fix; do not whitelist or downgrade it.
+The machine-readable report includes known_routing_safety_blockers, the sum of confirmed failed probes and unsupported engine restriction types. The `accepted` field now requires **both** counts to be zero. It is not a production release certificate: skipped, no-route and inconclusive restrictions still need separate evidence. The r14551046 prohibited left turn remains a confirmed failing case pending an actual supported routing fix; do not whitelist or downgrade it.
 
 ## Paired terminal-edge investigation (2026-10-10)
 
@@ -155,3 +157,20 @@ near/far behaviour differs. Follow with a properly supported engine fix or
 fail-closed route protection, validated against the same OSM relation and
 related regression routes. The three `only_u_turn` engine limitations are
 separate unresolved release-safety blockers.
+
+## Conservative multi-probe verdicts
+
+Some restriction relations require multiple probes (for example one permitted
+`only_*` exit and several potentially forbidden exits, or paired terminal-edge
+driveway checks). It was previously possible to report a PASS when one probe
+passed but another probe was inconclusive or had no route. The verdict order is
+now **fail → inconclusive → no_route → pass**. PASS requires that every probe
+was successfully assessed and none broke the restriction. A terminal-edge
+violation still fails even if the near-end probe is inconclusive.
+
+Confirmed engine-unsupported `only_u_turn` restrictions now keep the
+acceptance workflow red even if no supported probe fails. This is a
+conservative automated test gate, not a modification of which roads are
+permitted in the installed Android app. All safety issues remain outstanding
+until engine support or source-backed runtime protection is implemented and
+proven in replay tests.

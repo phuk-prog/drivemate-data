@@ -82,7 +82,7 @@ class EngineLimitationTests(unittest.TestCase):
         self.assertEqual(1, report["counts"]["engine_unsupported"])
         self.assertEqual(1, report["known_routing_safety_blockers"])
         self.assertEqual(30, report["engine_unsupported"][0]["relation"])
-        self.assertTrue(report["accepted"])
+        self.assertFalse(report["accepted"])  # unsupported is a safety blocker, not accepted
         self.assertIn("only_u_turn", ra.summary_markdown(report))
         # An ordinary restriction failing alongside it still rejects the run.
         both = run([rel(30, members(SOUTH, SOUTH), restriction="only_u_turn"), rel(31, members())],
@@ -201,6 +201,25 @@ class OnlyTurnTests(unittest.TestCase):
         })
         self.assertEqual(1, report["counts"]["pass"])
         self.assertEqual(0, report["counts"]["fail"])
+
+    def test_only_turn_mixed_success_and_inconclusive_is_not_a_pass(self):
+        result = self.only({
+            NORTH: [edge(SOUTH, 2), edge(NORTH, 4)],
+            EAST: [edge(SOUTH, 2), edge(NORTH, 4), edge(20, 6), edge(21, 3), edge(EAST, 2)],
+            WEST: [edge(WEST, 2), edge(WEST, 5)],  # snapped onto another road
+            # SOUTH is unroutable; neither result is a verified pass.
+        })
+        self.assertEqual(0, result["counts"]["pass"])
+        self.assertEqual(1, result["counts"]["inconclusive"])
+        self.assertEqual("inconclusive", result["inconclusive_examples"][0]["probes"][3]["status"]
+                         if result["inconclusive_examples"][0]["probes"][3]["target_way"] == WEST
+                         else "inconclusive")
+
+    def test_only_turn_mixed_success_and_no_route_is_not_a_pass(self):
+        result = self.only({NORTH: [edge(SOUTH, 2), edge(NORTH, 4)]})
+        self.assertEqual(0, result["counts"]["pass"])
+        self.assertEqual(1, result["counts"]["no_route"])
+        self.assertEqual(0, result["counts"]["fail"])
 
     def test_only_probes_every_other_exit_including_u_turn(self):
         router = FakeRouter({})
