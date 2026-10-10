@@ -1,0 +1,25 @@
+{
+  "description": "Greater Manchester acceptance queries for the offline search file. Expected points come from postcodes.io (postcode centroids, checked 10 Oct 2026) or well-known town centres. user_near stands in for a driver in Greater Manchester so ties between same-named places elsewhere in the UK resolve locally, exactly as the app does.",
+  "queries": [
+    {"query": "SK8 2EZ", "near": [53.395466, -2.194193], "radius_m": 200, "types": ["P"], "note": "postcodes.io"},
+    {"query": "sk82ez", "near": [53.395466, -2.194193], "radius_m": 200, "types": ["P"], "note": "no space, lower case"},
+    {"query": "SK1 1LH", "near": [53.411726, -2.157845], "radius_m": 200, "types": ["P"], "note": "Stockport, postcodes.io"},
+    {"query": "SK4 2JZ", "near": [53.406465, -2.184751], "radius_m": 200, "types": ["P"], "note": "Heaton Mersey area, postcodes.io"},
+    {"query": "SK7 1AA", "near": [53.356392, -2.165514], "radius_m": 200, "types": ["P"], "note": "Bramhall, postcodes.io"},
+    {"query": "M1 1AE", "near": [53.483487, -2.231182], "radius_m": 200, "types": ["P"], "note": "Manchester centre, postcodes.io"},
+    {"query": "M2 5DB", "near": [53.47929, -2.244554], "radius_m": 200, "types": ["P"], "note": "Manchester centre, postcodes.io"},
+    {"query": "M13 9PL", "near": [53.466926, -2.233578], "radius_m": 200, "types": ["P"], "note": "Oxford Road, postcodes.io"},
+    {"query": "M32 0TT", "near": [53.45216, -2.293912], "radius_m": 200, "types": ["P"], "note": "Old Trafford, postcodes.io"},
+    {"query": "M90 1QX", "near": [53.361897, -2.27084], "radius_m": 200, "types": ["P"], "note": "Manchester Airport, postcodes.io"},
+    {"query": "Menai Grove", "near": [53.395466, -2.194193], "radius_m": 800, "rank": 3, "user_near": [53.40, -2.19], "note": "street holding SK8 2EZ"},
+    {"query": "Stockport", "near": [53.4106, -2.1575], "radius_m": 3000, "user_near": [53.40, -2.19], "note": "town centre"},
+    {"query": "Cheadle Hulme", "near": [53.3730, -2.1880], "radius_m": 3000, "user_near": [53.40, -2.19], "note": "village centre"},
+    {"query": "Altrincham", "near": [53.3870, -2.3500], "radius_m": 3000, "user_near": [53.40, -2.19], "note": "town centre"},
+    {"query": "Piccadilly", "near": [53.4810, -2.2370], "radius_m": 3000, "rank": 3, "user_near": [53.4808, -2.2426], "note": "Manchester Piccadilly; driver in Manchester"},
+    {"query": "Didsbury", "near": [53.4172, -2.2300], "radius_m": 3000, "user_near": [53.40, -2.19], "note": "village centre"},
+    {"query": "Bramhall", "near": [53.3560, -2.1700], "radius_m": 3000, "user_near": [53.40, -2.19], "note": "village centre"},
+    {"query": "Sale", "near": [53.4247, -2.3226], "radius_m": 3000, "rank": 3, "user_near": [53.40, -2.19], "note": "town; short name, several matches"},
+    {"query": "Oxford Road", "near": [53.4669, -2.2336], "radius_m": 2500, "rank": 3, "user_near": [53.4808, -2.2426], "note": "Manchester Oxford Road"},
+    {"query": "Stokport", "near": [53.4106, -2.1575], "radius_m": 3000, "user_near": [53.40, -2.19], "known_fail": true, "note": "KNOWN: misspelling. Search is prefix-only with no fuzzy matching, so this finds nothing."}
+  ]
+}

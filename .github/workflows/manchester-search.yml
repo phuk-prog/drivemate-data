@@ -1,0 +1,57 @@
+name: Manchester search check
+
+# Builds the offline search file from OS Open Names (same download as map-data.yml) and checks
+# that real Greater Manchester places are found where they should be. Nothing is published.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/manchester-search.yml"
+      - "scripts/search_acceptance.py"
+      - "docs/validation/manchester-search-queries.json"
+      - "tests/test_search_acceptance.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: map-data
+  cancel-in-progress: false
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python3 -m unittest tests.test_search_acceptance
+      - name: Download OS Open Names
+        run: |
+          mkdir -p work/osnames out
+          url=$(curl -sSf "https://api.os.uk/downloads/v1/products/OpenNames/downloads?area=GB&format=CSV" | jq -r '.[0].url')
+          curl -sSfL -o work/opennames.zip "$url"
+          unzip -q -o work/opennames.zip -d work/osnames
+          test -n "$(find work/osnames -name '*.csv' | head -1)"
+      - name: Build the search file
+        run: python3 scripts/search_offline.py work/osnames out/search-offline-uk.tsv.gz > out/search-offline-stats.json
+      - name: Run the Manchester queries
+        run: |
+          set +e
+          python3 scripts/search_acceptance.py out/search-offline-uk.tsv.gz docs/validation/manchester-search-queries.json \
+            --out out/manchester-search-report.json --summary out/summary.md
+          echo $? > out/exit-code
+          { echo "## Manchester offline search"; cat out/summary.md; } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manchester-search-report
+          path: |
+            out/manchester-search-report.json
+            out/summary.md
+      - name: Fail on unexpected FAIL
+        run: test "$(cat out/exit-code)" = 0
