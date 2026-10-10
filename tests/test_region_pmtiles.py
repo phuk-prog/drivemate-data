@@ -96,6 +96,13 @@ class RegionPartitionTests(unittest.TestCase):
             self.assertIn("places-213_-9.json.gz",companions["places"])
             self.assertNotIn("companions",manifest["packages"]["base"])
             self.assertIn("cameras-uk.json",manifest["national_files"])
+            # Re-exporting at a different clock time gives identical bytes.
+            from unittest import mock
+            again=Path(tmp)/"again"
+            with mock.patch("time.time",return_value=2_000_000_000.0):
+                second=build(path,again,pilot="8/126/82",max_bytes=200000)
+            for name in manifest["packages"]:
+                self.assertEqual(manifest["packages"][name]["sha256"],second["packages"][name]["sha256"])
             self.assertEqual(5,manifest["selected_addressed_tiles"])
 
     def test_zoom9_is_base_only_when_region_subdivides(self):

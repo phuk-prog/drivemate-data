@@ -120,3 +120,38 @@ Next: confirm Android CI, implement checksum-verified package acquisition
 and safe renderer integration on the development branch, check adjacent
 regional seams and missing-region fallback, and run real on-device
 rendering/navigation tests before exposing regional downloads.
+
+
+### Whole-UK partition and reproducible exports — 10 October 2026
+
+Planned locally against the published, SHA-256-verified UK archive
+(`8ec2a5cd…f069`, 1,638,441,575 bytes; release manifest
+`map-data-20261008-bootstrap`, `1ce4935d…63ae`). Evidence:
+`docs/validation/uk-regional-plan-20261010.json`.
+
+- **206 z8 detail packages + one 18.2 MB base; no root needs subdivision.**
+  Largest is `region-z8-x127-y85` (west London / Thames Valley) at an
+  estimated 143.6 MB; Manchester 116.3 MB. All are under the 200 MB limit.
+- 144 packages are under 1 MB (coastal and sea slivers). They cost almost
+  nothing to verify; multi-region batch requests handle them in bulk.
+- Manchester's companion list, filtered to the real release inventory:
+  12 lane squares and 28 places squares. The current release has no
+  `limits-*`/`roadinfo-*` squares and no charge-zone or offline-search file,
+  so none are listed. This is a known gap in the current release, not an
+  exporter fault.
+
+**Reproducibility fix.** pmtiles 3.4.1 gzips each archive's root
+directory and metadata with the current time, so the same region exported
+twice gave different SHA-256 values. The CI pilot's recorded hashes
+(`f584f1c2…`, `21f33b60…`) were therefore one-off. `region_pmtiles.py` now
+fixes the gzip timestamp. Tile payloads were always copied raw. Two local
+exports of Manchester are now byte-identical and pass the full verifier:
+
+| File | Bytes | Tiles | SHA-256 (reproducible) |
+|---|---:|---:|---|
+| base | 18,185,774 | 1,063 | `f1e06acc85e8277baf52b5ab859de2b24add12fd968d100d7b485f796e89d823` |
+| region-z8-x126-y82 | 116,261,842 | 5,456 | `8544a3ddef349ab2731c91bf6a2431c0e4a4c7ada87de3853e323e53a55253d8` |
+
+A future publisher can now re-derive a region and get the hashes recorded
+in the ledger. A regression test re-exports at a different clock time and
+requires identical hashes.

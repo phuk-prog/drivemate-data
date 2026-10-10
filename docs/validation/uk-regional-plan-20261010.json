@@ -1,0 +1,2149 @@
+{
+ "base": {
+  "estimated_tile_bytes": 18207594,
+  "tiles": 1063
+ },
+ "command": "region_pmtiles.py --plan-only --release-manifest manifest.json (pinned pmtiles 3.4.1)",
+ "date": "2026-10-10",
+ "detail_packages": 206,
+ "largest_detail_estimated_bytes": 143572602,
+ "manchester_companions": {
+  "lanes": [
+   "lanes-106_-3.json",
+   "lanes-106_-4.json",
+   "lanes-106_-5.json",
+   "lanes-106_-6.json",
+   "lanes-107_-3.json",
+   "lanes-107_-4.json",
+   "lanes-107_-5.json",
+   "lanes-107_-6.json",
+   "lanes-108_-3.json",
+   "lanes-108_-4.json",
+   "lanes-108_-5.json",
+   "lanes-108_-6.json"
+  ],
+  "limits": [],
+  "places": [
+   "places-213_-10.json.gz",
+   "places-213_-11.json.gz",
+   "places-213_-12.json.gz",
+   "places-213_-6.json.gz",
+   "places-213_-7.json.gz",
+   "places-213_-8.json.gz",
+   "places-213_-9.json.gz",
+   "places-214_-10.json.gz",
+   "places-214_-11.json.gz",
+   "places-214_-12.json.gz",
+   "places-214_-6.json.gz",
+   "places-214_-7.json.gz",
+   "places-214_-8.json.gz",
+   "places-214_-9.json.gz",
+   "places-215_-10.json.gz",
+   "places-215_-11.json.gz",
+   "places-215_-12.json.gz",
+   "places-215_-6.json.gz",
+   "places-215_-7.json.gz",
+   "places-215_-8.json.gz",
+   "places-215_-9.json.gz",
+   "places-216_-10.json.gz",
+   "places-216_-11.json.gz",
+   "places-216_-12.json.gz",
+   "places-216_-6.json.gz",
+   "places-216_-7.json.gz",
+   "places-216_-8.json.gz",
+   "places-216_-9.json.gz"
+  ],
+  "roadinfo": []
+ },
+ "manchester_reproducible_export": {
+  "base": {
+   "bytes": 18185774,
+   "sha256": "f1e06acc85e8277baf52b5ab859de2b24add12fd968d100d7b485f796e89d823",
+   "tiles": 1063,
+   "verified_tile_payloads": 1063
+  },
+  "region-z8-x126-y82": {
+   "bytes": 116261842,
+   "sha256": "8544a3ddef349ab2731c91bf6a2431c0e4a4c7ada87de3853e323e53a55253d8",
+   "tiles": 5456,
+   "verified_tile_payloads": 5456
+  }
+ },
+ "max_package_bytes": 200000000,
+ "national_files_in_release": [
+  "cameras-uk.json"
+ ],
+ "packages_under_1MB": 144,
+ "roots": {
+  "region-z8-x117-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 77146,
+   "tiles": 1001
+  },
+  "region-z8-x117-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y75": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y76": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y77": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y78": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y79": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y80": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y81": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y82": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y83": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y84": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y85": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y86": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 245476,
+   "tiles": 3188
+  },
+  "region-z8-x117-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 115646,
+   "tiles": 1501
+  },
+  "region-z8-x118-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 131943,
+   "tiles": 1712
+  },
+  "region-z8-x118-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y75": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y76": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y77": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 447677,
+   "tiles": 5456
+  },
+  "region-z8-x118-y78": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y79": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y80": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y81": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y82": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y83": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y84": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y85": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y86": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x118-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 197855,
+   "tiles": 2568
+  },
+  "region-z8-x119-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 131943,
+   "tiles": 1712
+  },
+  "region-z8-x119-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y75": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y76": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y77": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y78": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y79": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y80": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y81": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y82": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y83": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y84": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y85": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y86": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x119-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 197855,
+   "tiles": 2568
+  },
+  "region-z8-x120-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 131943,
+   "tiles": 1712
+  },
+  "region-z8-x120-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x120-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x120-y75": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x120-y76": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x120-y77": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x120-y78": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 1,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 547257,
+   "tiles": 5456
+  },
+  "region-z8-x120-y79": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 1,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 574104,
+   "tiles": 5456
+  },
+  "region-z8-x120-y80": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x120-y81": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 480606,
+   "tiles": 5425
+  },
+  "region-z8-x120-y82": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 737618,
+   "tiles": 5211
+  },
+  "region-z8-x120-y83": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 442358,
+   "tiles": 5455
+  },
+  "region-z8-x120-y84": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 658630,
+   "tiles": 4785
+  },
+  "region-z8-x120-y85": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 455290,
+   "tiles": 5454
+  },
+  "region-z8-x120-y86": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x120-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 197855,
+   "tiles": 2568
+  },
+  "region-z8-x121-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 131903,
+   "tiles": 1712
+  },
+  "region-z8-x121-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 419988,
+   "tiles": 5456
+  },
+  "region-z8-x121-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420107,
+   "tiles": 5456
+  },
+  "region-z8-x121-y75": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x121-y76": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 822141,
+   "tiles": 5456
+  },
+  "region-z8-x121-y77": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 639015,
+   "tiles": 5456
+  },
+  "region-z8-x121-y78": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 1,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 688743,
+   "tiles": 5456
+  },
+  "region-z8-x121-y79": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 1,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 605066,
+   "tiles": 5456
+  },
+  "region-z8-x121-y80": {
+   "companion_counts": {
+    "lanes": 1,
+    "limits": 0,
+    "places": 4,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 442852,
+   "tiles": 5452
+  },
+  "region-z8-x121-y81": {
+   "companion_counts": {
+    "lanes": 2,
+    "limits": 0,
+    "places": 8,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 650055,
+   "tiles": 4595
+  },
+  "region-z8-x121-y82": {
+   "companion_counts": {
+    "lanes": 1,
+    "limits": 0,
+    "places": 8,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 223757,
+   "tiles": 350
+  },
+  "region-z8-x121-y83": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 10,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 541138,
+   "tiles": 2084
+  },
+  "region-z8-x121-y84": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 8,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 193664,
+   "tiles": 473
+  },
+  "region-z8-x121-y85": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 2,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 616679,
+   "tiles": 5236
+  },
+  "region-z8-x121-y86": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420107,
+   "tiles": 5456
+  },
+  "region-z8-x121-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 197855,
+   "tiles": 2568
+  },
+  "region-z8-x122-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 130231,
+   "tiles": 1712
+  },
+  "region-z8-x122-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 414656,
+   "tiles": 5456
+  },
+  "region-z8-x122-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 419988,
+   "tiles": 5456
+  },
+  "region-z8-x122-y75": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x122-y76": {
+   "companion_counts": {
+    "lanes": 1,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 865119,
+   "tiles": 5456
+  },
+  "region-z8-x122-y77": {
+   "companion_counts": {
+    "lanes": 5,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 5415337,
+   "tiles": 5456
+  },
+  "region-z8-x122-y78": {
+   "companion_counts": {
+    "lanes": 4,
+    "limits": 0,
+    "places": 4,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 2945722,
+   "tiles": 5456
+  },
+  "region-z8-x122-y79": {
+   "companion_counts": {
+    "lanes": 2,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 453167,
+   "tiles": 5456
+  },
+  "region-z8-x122-y80": {
+   "companion_counts": {
+    "lanes": 4,
+    "limits": 0,
+    "places": 17,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 2280374,
+   "tiles": 4477
+  },
+  "region-z8-x122-y81": {
+   "companion_counts": {
+    "lanes": 6,
+    "limits": 0,
+    "places": 24,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 10916137,
+   "tiles": 3685
+  },
+  "region-z8-x122-y82": {
+   "companion_counts": {
+    "lanes": 3,
+    "limits": 0,
+    "places": 24,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 522491,
+   "tiles": 155
+  },
+  "region-z8-x122-y84": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 17,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 326882,
+   "tiles": 2423
+  },
+  "region-z8-x122-y85": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 1,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 455566,
+   "tiles": 5456
+  },
+  "region-z8-x122-y86": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 419988,
+   "tiles": 5456
+  },
+  "region-z8-x122-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 197855,
+   "tiles": 2568
+  },
+  "region-z8-x123-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 130231,
+   "tiles": 1712
+  },
+  "region-z8-x123-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 414656,
+   "tiles": 5456
+  },
+  "region-z8-x123-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 423496,
+   "tiles": 5456
+  },
+  "region-z8-x123-y75": {
+   "companion_counts": {
+    "lanes": 1,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 590241,
+   "tiles": 5456
+  },
+  "region-z8-x123-y76": {
+   "companion_counts": {
+    "lanes": 4,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 6304457,
+   "tiles": 5456
+  },
+  "region-z8-x123-y77": {
+   "companion_counts": {
+    "lanes": 11,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 9968672,
+   "tiles": 5455
+  },
+  "region-z8-x123-y78": {
+   "companion_counts": {
+    "lanes": 8,
+    "limits": 0,
+    "places": 15,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 8794069,
+   "tiles": 5456
+  },
+  "region-z8-x123-y79": {
+   "companion_counts": {
+    "lanes": 9,
+    "limits": 0,
+    "places": 19,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 6362262,
+   "tiles": 5456
+  },
+  "region-z8-x123-y80": {
+   "companion_counts": {
+    "lanes": 11,
+    "limits": 0,
+    "places": 27,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 7782626,
+   "tiles": 5444
+  },
+  "region-z8-x123-y81": {
+   "companion_counts": {
+    "lanes": 8,
+    "limits": 0,
+    "places": 28,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 40992736,
+   "tiles": 5299
+  },
+  "region-z8-x123-y82": {
+   "companion_counts": {
+    "lanes": 4,
+    "limits": 0,
+    "places": 22,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 4341231,
+   "tiles": 2713
+  },
+  "region-z8-x123-y83": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 25,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 221370,
+   "tiles": 2013
+  },
+  "region-z8-x123-y84": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 8,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 524647,
+   "tiles": 4732
+  },
+  "region-z8-x123-y85": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 485027,
+   "tiles": 5456
+  },
+  "region-z8-x123-y86": {
+   "companion_counts": {
+    "lanes": 1,
+    "limits": 0,
+    "places": 2,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 2177562,
+   "tiles": 5456
+  },
+  "region-z8-x123-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 1,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 235131,
+   "tiles": 2568
+  },
+  "region-z8-x124-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 131903,
+   "tiles": 1712
+  },
+  "region-z8-x124-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 475312,
+   "tiles": 5456
+  },
+  "region-z8-x124-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 612648,
+   "tiles": 5456
+  },
+  "region-z8-x124-y75": {
+   "companion_counts": {
+    "lanes": 3,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 667210,
+   "tiles": 5456
+  },
+  "region-z8-x124-y76": {
+   "companion_counts": {
+    "lanes": 6,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 6236341,
+   "tiles": 5454
+  },
+  "region-z8-x124-y77": {
+   "companion_counts": {
+    "lanes": 11,
+    "limits": 0,
+    "places": 3,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 13998972,
+   "tiles": 5430
+  },
+  "region-z8-x124-y78": {
+   "companion_counts": {
+    "lanes": 8,
+    "limits": 0,
+    "places": 24,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 14144044,
+   "tiles": 5452
+  },
+  "region-z8-x124-y79": {
+   "companion_counts": {
+    "lanes": 12,
+    "limits": 0,
+    "places": 28,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 27985037,
+   "tiles": 5455
+  },
+  "region-z8-x124-y80": {
+   "companion_counts": {
+    "lanes": 12,
+    "limits": 0,
+    "places": 32,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 17470415,
+   "tiles": 5456
+  },
+  "region-z8-x124-y81": {
+   "companion_counts": {
+    "lanes": 6,
+    "limits": 0,
+    "places": 19,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 5074869,
+   "tiles": 5239
+  },
+  "region-z8-x124-y82": {
+   "companion_counts": {
+    "lanes": 4,
+    "limits": 0,
+    "places": 7,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 1907481,
+   "tiles": 5394
+  },
+  "region-z8-x124-y83": {
+   "companion_counts": {
+    "lanes": 7,
+    "limits": 0,
+    "places": 13,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 6761895,
+   "tiles": 5456
+  },
+  "region-z8-x124-y84": {
+   "companion_counts": {
+    "lanes": 6,
+    "limits": 0,
+    "places": 18,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 16042873,
+   "tiles": 5456
+  },
+  "region-z8-x124-y85": {
+   "companion_counts": {
+    "lanes": 7,
+    "limits": 0,
+    "places": 17,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 3876969,
+   "tiles": 5456
+  },
+  "region-z8-x124-y86": {
+   "companion_counts": {
+    "lanes": 8,
+    "limits": 0,
+    "places": 17,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 25110850,
+   "tiles": 5456
+  },
+  "region-z8-x124-y87": {
+   "companion_counts": {
+    "lanes": 1,
+    "limits": 0,
+    "places": 2,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 270509,
+   "tiles": 2568
+  },
+  "region-z8-x125-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 181012,
+   "tiles": 1712
+  },
+  "region-z8-x125-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 772604,
+   "tiles": 5456
+  },
+  "region-z8-x125-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 616792,
+   "tiles": 5456
+  },
+  "region-z8-x125-y75": {
+   "companion_counts": {
+    "lanes": 6,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 4415148,
+   "tiles": 5456
+  },
+  "region-z8-x125-y76": {
+   "companion_counts": {
+    "lanes": 7,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 5859920,
+   "tiles": 5438
+  },
+  "region-z8-x125-y77": {
+   "companion_counts": {
+    "lanes": 11,
+    "limits": 0,
+    "places": 6,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 12312991,
+   "tiles": 5455
+  },
+  "region-z8-x125-y78": {
+   "companion_counts": {
+    "lanes": 8,
+    "limits": 0,
+    "places": 24,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 20838955,
+   "tiles": 5455
+  },
+  "region-z8-x125-y79": {
+   "companion_counts": {
+    "lanes": 12,
+    "limits": 0,
+    "places": 24,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 59841127,
+   "tiles": 5455
+  },
+  "region-z8-x125-y80": {
+   "companion_counts": {
+    "lanes": 12,
+    "limits": 0,
+    "places": 30,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 21309821,
+   "tiles": 5456
+  },
+  "region-z8-x125-y81": {
+   "companion_counts": {
+    "lanes": 7,
+    "limits": 0,
+    "places": 17,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 25851158,
+   "tiles": 5456
+  },
+  "region-z8-x125-y82": {
+   "companion_counts": {
+    "lanes": 9,
+    "limits": 0,
+    "places": 13,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 22301996,
+   "tiles": 5456
+  },
+  "region-z8-x125-y83": {
+   "companion_counts": {
+    "lanes": 12,
+    "limits": 0,
+    "places": 30,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 49325886,
+   "tiles": 5456
+  },
+  "region-z8-x125-y84": {
+   "companion_counts": {
+    "lanes": 8,
+    "limits": 0,
+    "places": 24,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 40999991,
+   "tiles": 5456
+  },
+  "region-z8-x125-y85": {
+   "companion_counts": {
+    "lanes": 12,
+    "limits": 0,
+    "places": 28,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 54473376,
+   "tiles": 5456
+  },
+  "region-z8-x125-y86": {
+   "companion_counts": {
+    "lanes": 7,
+    "limits": 0,
+    "places": 13,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 23525952,
+   "tiles": 5456
+  },
+  "region-z8-x125-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 261209,
+   "tiles": 2568
+  },
+  "region-z8-x126-y72": {
+   "companion_counts": {
+    "lanes": 1,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 262860,
+   "tiles": 1712
+  },
+  "region-z8-x126-y73": {
+   "companion_counts": {
+    "lanes": 3,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 1580692,
+   "tiles": 5456
+  },
+  "region-z8-x126-y74": {
+   "companion_counts": {
+    "lanes": 3,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 1100095,
+   "tiles": 5456
+  },
+  "region-z8-x126-y75": {
+   "companion_counts": {
+    "lanes": 3,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 1699359,
+   "tiles": 5456
+  },
+  "region-z8-x126-y76": {
+   "companion_counts": {
+    "lanes": 1,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 486869,
+   "tiles": 5456
+  },
+  "region-z8-x126-y77": {
+   "companion_counts": {
+    "lanes": 6,
+    "limits": 0,
+    "places": 3,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 7907071,
+   "tiles": 5456
+  },
+  "region-z8-x126-y78": {
+   "companion_counts": {
+    "lanes": 5,
+    "limits": 0,
+    "places": 14,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 17003690,
+   "tiles": 5456
+  },
+  "region-z8-x126-y79": {
+   "companion_counts": {
+    "lanes": 6,
+    "limits": 0,
+    "places": 13,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 7430983,
+   "tiles": 5456
+  },
+  "region-z8-x126-y80": {
+   "companion_counts": {
+    "lanes": 11,
+    "limits": 0,
+    "places": 31,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 36892705,
+   "tiles": 5456
+  },
+  "region-z8-x126-y81": {
+   "companion_counts": {
+    "lanes": 8,
+    "limits": 0,
+    "places": 28,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 40643382,
+   "tiles": 5456
+  },
+  "region-z8-x126-y82": {
+   "companion_counts": {
+    "lanes": 12,
+    "limits": 0,
+    "places": 28,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 116247602,
+   "tiles": 5456
+  },
+  "region-z8-x126-y83": {
+   "companion_counts": {
+    "lanes": 12,
+    "limits": 0,
+    "places": 35,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 87324016,
+   "tiles": 5456
+  },
+  "region-z8-x126-y84": {
+   "companion_counts": {
+    "lanes": 8,
+    "limits": 0,
+    "places": 28,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 77307150,
+   "tiles": 5456
+  },
+  "region-z8-x126-y85": {
+   "companion_counts": {
+    "lanes": 12,
+    "limits": 0,
+    "places": 35,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 78847746,
+   "tiles": 5456
+  },
+  "region-z8-x126-y86": {
+   "companion_counts": {
+    "lanes": 4,
+    "limits": 0,
+    "places": 11,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 9388471,
+   "tiles": 5456
+  },
+  "region-z8-x126-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 2,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 351444,
+   "tiles": 2111
+  },
+  "region-z8-x127-y72": {
+   "companion_counts": {
+    "lanes": 2,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 154680,
+   "tiles": 1712
+  },
+  "region-z8-x127-y73": {
+   "companion_counts": {
+    "lanes": 3,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 3743045,
+   "tiles": 5456
+  },
+  "region-z8-x127-y74": {
+   "companion_counts": {
+    "lanes": 2,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 2365036,
+   "tiles": 5456
+  },
+  "region-z8-x127-y75": {
+   "companion_counts": {
+    "lanes": 1,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 567801,
+   "tiles": 5456
+  },
+  "region-z8-x127-y76": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 429483,
+   "tiles": 5456
+  },
+  "region-z8-x127-y77": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 458612,
+   "tiles": 5456
+  },
+  "region-z8-x127-y78": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 465758,
+   "tiles": 5456
+  },
+  "region-z8-x127-y79": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 1,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 478220,
+   "tiles": 5456
+  },
+  "region-z8-x127-y80": {
+   "companion_counts": {
+    "lanes": 3,
+    "limits": 0,
+    "places": 3,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 591864,
+   "tiles": 5456
+  },
+  "region-z8-x127-y81": {
+   "companion_counts": {
+    "lanes": 5,
+    "limits": 0,
+    "places": 16,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 19332001,
+   "tiles": 5456
+  },
+  "region-z8-x127-y82": {
+   "companion_counts": {
+    "lanes": 9,
+    "limits": 0,
+    "places": 24,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 51279347,
+   "tiles": 5456
+  },
+  "region-z8-x127-y83": {
+   "companion_counts": {
+    "lanes": 9,
+    "limits": 0,
+    "places": 30,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 63094995,
+   "tiles": 5456
+  },
+  "region-z8-x127-y84": {
+   "companion_counts": {
+    "lanes": 6,
+    "limits": 0,
+    "places": 24,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 82794378,
+   "tiles": 5456
+  },
+  "region-z8-x127-y85": {
+   "companion_counts": {
+    "lanes": 9,
+    "limits": 0,
+    "places": 28,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 143572602,
+   "tiles": 5456
+  },
+  "region-z8-x127-y86": {
+   "companion_counts": {
+    "lanes": 3,
+    "limits": 0,
+    "places": 5,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 4763007,
+   "tiles": 5456
+  },
+  "region-z8-x127-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 1,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 212902,
+   "tiles": 2418
+  },
+  "region-z8-x128-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 131943,
+   "tiles": 1712
+  },
+  "region-z8-x128-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 436418,
+   "tiles": 5456
+  },
+  "region-z8-x128-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 434493,
+   "tiles": 5456
+  },
+  "region-z8-x128-y75": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 432794,
+   "tiles": 5456
+  },
+  "region-z8-x128-y76": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420783,
+   "tiles": 5456
+  },
+  "region-z8-x128-y77": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x128-y78": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x128-y79": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x128-y80": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 420112,
+   "tiles": 5456
+  },
+  "region-z8-x128-y81": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 451552,
+   "tiles": 5456
+  },
+  "region-z8-x128-y82": {
+   "companion_counts": {
+    "lanes": 2,
+    "limits": 0,
+    "places": 3,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 2436579,
+   "tiles": 5456
+  },
+  "region-z8-x128-y83": {
+   "companion_counts": {
+    "lanes": 7,
+    "limits": 0,
+    "places": 22,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 30144807,
+   "tiles": 5456
+  },
+  "region-z8-x128-y84": {
+   "companion_counts": {
+    "lanes": 6,
+    "limits": 0,
+    "places": 22,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 63050703,
+   "tiles": 5456
+  },
+  "region-z8-x128-y85": {
+   "companion_counts": {
+    "lanes": 8,
+    "limits": 0,
+    "places": 22,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 72391983,
+   "tiles": 5456
+  },
+  "region-z8-x128-y86": {
+   "companion_counts": {
+    "lanes": 2,
+    "limits": 0,
+    "places": 8,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 519069,
+   "tiles": 5174
+  },
+  "region-z8-x128-y87": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 6,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 53198,
+   "tiles": 471
+  },
+  "region-z8-x129-y72": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 118465,
+   "tiles": 1537
+  },
+  "region-z8-x129-y73": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 377020,
+   "tiles": 4896
+  },
+  "region-z8-x129-y74": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 398739,
+   "tiles": 4896
+  },
+  "region-z8-x129-y75": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 383291,
+   "tiles": 4896
+  },
+  "region-z8-x129-y76": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 377018,
+   "tiles": 4896
+  },
+  "region-z8-x129-y77": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 377020,
+   "tiles": 4896
+  },
+  "region-z8-x129-y78": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 377018,
+   "tiles": 4896
+  },
+  "region-z8-x129-y79": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 377020,
+   "tiles": 4896
+  },
+  "region-z8-x129-y80": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 377018,
+   "tiles": 4896
+  },
+  "region-z8-x129-y81": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 403741,
+   "tiles": 4896
+  },
+  "region-z8-x129-y82": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 0,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 423194,
+   "tiles": 4896
+  },
+  "region-z8-x129-y83": {
+   "companion_counts": {
+    "lanes": 4,
+    "limits": 0,
+    "places": 8,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 6702906,
+   "tiles": 4896
+  },
+  "region-z8-x129-y84": {
+   "companion_counts": {
+    "lanes": 3,
+    "limits": 0,
+    "places": 6,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 5705018,
+   "tiles": 4896
+  },
+  "region-z8-x129-y85": {
+   "companion_counts": {
+    "lanes": 2,
+    "limits": 0,
+    "places": 6,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 970078,
+   "tiles": 3706
+  },
+  "region-z8-x129-y86": {
+   "companion_counts": {
+    "lanes": 0,
+    "limits": 0,
+    "places": 10,
+    "roadinfo": 0
+   },
+   "estimated_tile_bytes": 82342,
+   "tiles": 531
+  }
+ },
+ "schema": 1,
+ "source": {
+  "manifest_sha256": "1ce4935da3277bbf90d2cf5abd91c8d16fd3f025de1fbce84f5215cbc73c63ae",
+  "manifest_tag": "map-data-20261008-bootstrap",
+  "pmtiles_bytes": 1638441575,
+  "pmtiles_sha256": "8ec2a5cd5e4373a5d75243c1aa46ccb40adb3a8dd9b821f06a3b2c765f9cf069",
+  "release_pointer": "map-data-uk/latest.json"
+ },
+ "status": "unpublished planning evidence",
+ "subdivided_roots": 0
+}

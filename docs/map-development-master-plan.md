@@ -161,3 +161,29 @@ Next milestones before enabling regional bulk jobs:
 4. Re-check CI, privacy, performance, output formats and budgets, then
    explicitly change the batch request to enabled with sequence 1.
 5. Run one z8-area validation at a time, persisting proofs before resuming.
+
+
+## Regional download batch — 10 October 2026 (Claude session)
+
+Development continued on `claude/drivemate-uk-navigation-9oysko` in both
+repositories, branched from the current `codex/architecture-foundation`
+heads (data `c3ee41e`, Android `d4957a7`); nothing was merged to
+`codex/architecture-foundation` or `main`.
+
+| Item | Status | Evidence |
+|---|---|---|
+| Companion squares per regional package (`region_companions.py`) | Implemented, verified locally on real data | Manchester: 12 lane + 28 places squares from real release inventory |
+| Multi-region budgeted batch requests with per-region checkpoint/resume | Implemented, source-tested | `test_region_batch_queue.py` (3 new), `test_regional_batch_workflow.py` |
+| Reproducible regional PMTiles exports | Fixed, verified on real Manchester | Two exports byte-identical; full verifier passes |
+| Whole-UK partition on real archive | Verified (planning only) | 206 packages, none over 200 MB, no subdivision; `docs/validation/uk-regional-plan-20261010.json` |
+| Android regional manifest parser / planner / resumable verified downloader | Implemented, JVM-tested | Android preflight: 326 JVM tests, lint, robot assembly; `RegionalMapDownloadTest` |
+| Bulk regional expansion | **Held (disabled)** | Gates below still open |
+
+Unchanged gates before setting `docs/regional-batch-request.json` to enabled:
+real Manchester on-device rendering/navigation acceptance, source-rights
+decisions (Overture lineage, Mapillary caches, OS notices) and exact-source CI
+on the development branch. The "DriveMate UK Expansion" scheduled controller is
+not visible among this account's Claude routines (it is described above as a
+ChatGPT task); no duplicate automation was created.
+
+Data preflight on this branch: 125 unit tests and five selftests pass.

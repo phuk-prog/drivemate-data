@@ -9,7 +9,9 @@ authorization to distribute archives under unreviewed source licences.
 """
 import argparse
 from collections import defaultdict
+import contextlib
 import copy
+import gzip
 import hashlib
 import json
 import math
@@ -128,6 +130,25 @@ def describe_groups(groups):
     }
 
 
+@contextlib.contextmanager
+def deterministic_gzip():
+    """Make archive bytes reproducible: identical input gives identical SHA-256.
+
+    pmtiles 3.4.1 gzips the root directory and metadata with the current time
+    in the gzip header, so re-exporting an unchanged region changed its
+    checksum. Tile payloads are copied raw and are unaffected.
+    """
+    original = gzip.compress
+
+    def compress(data, compresslevel=9, *, mtime=None):
+        return original(data, compresslevel, mtime=0)
+    gzip.compress = compress
+    try:
+        yield
+    finally:
+        gzip.compress = original
+
+
 def sha256(path):
     h = hashlib.sha256()
     with Path(path).open("rb") as stream:
@@ -232,7 +253,7 @@ def build(source, destination, max_bytes=DEFAULT_MAX_BYTES, pilot=None, dry_run=
                     })
                     new_metadata["bounds"] = ",".join(f"{v:.7f}" for v in info["bounds"])
                     new_metadata["center"] = f"{(west + east)/2:.7f},{(south+north)/2:.7f},{region[0]}"
-                with write(str(path)) as writer:
+                with deterministic_gzip(), write(str(path)) as writer:
                     for tileid, z, x, y, offset, length in rows:
                         writer.write_tile(tileid, fetch(header["tile_data_offset"]+offset, length))
                     writer.finalize(new_header, new_metadata)
