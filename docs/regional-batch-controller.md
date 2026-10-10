@@ -19,3 +19,7 @@ Rules:
 8. Bulk expansion is held until shared code, Manchester real Android rendering, legal source review and the full compatibility tests pass. A successful synthetic emulator case is not sufficient to release a live map.
 
 **Scheduling limitation:** GitHub `schedule` only triggers workflows located on the default branch. This development branch prepares the executable workflow but does not create a working unattended GitHub cron on its own. A separate scheduled DriveMate controller can request a run by committing a new approved `docs/regional-batch-request.json` sequence after release gates, triggering this branch's push workflow. Do not merge the entire development branch to main simply to enable cron. If scheduled directly on GitHub, merge only the vetted scheduler to `main` after approval, with code explicitly checked out from the tested revision.
+
+## Scheduled idempotency
+
+Disabled requests exit without downloading maps. Every enabled request must have an increasing integer sequence, and only a fully verified successful region can advance `last_sequence` in the ledger. Replaying one run cannot mark another regional root completed. The initial Manchester-only validation remains the existing seeded entry.

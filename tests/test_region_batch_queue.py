@@ -40,6 +40,14 @@ class RegionQueueTests(unittest.TestCase):
         self.assertEqual(["region-z10-x508-y328","region-z9-x254-y164"],selection["packages"])
         self.assertEqual(1,selection["completed_roots"])
 
+    def test_replay_sequence_rejected(self):
+        plan, ledger = fixture()
+        req = {"schema":1, "enabled":True,"sequence":3}
+        self.assertEqual(3,next_region(plan,ledger,req)["sequence"])
+        ledger["last_sequence"] = 3
+        with self.assertRaises(ValueError):
+            next_region(plan,ledger,req)
+
     def test_source_drift_refuses_prior_success(self):
         plan, ledger = fixture()
         plan["source_sha256"] = "e" * 64

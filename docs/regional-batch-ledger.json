@@ -7,5 +7,6 @@
       "run_url": "https://github.com/phuk-prog/drivemate-data/actions/runs/38031100907",
       "notes": "Manchester pilot validated 2026-10-10; test evidence and verified hashes in docs/regional-packaging.md"
     }
-  }
+  },
+  "last_sequence": 0
 }

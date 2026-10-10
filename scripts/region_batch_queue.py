@@ -72,9 +72,14 @@ def order_roots(roots):
     return sorted(roots, key=key)
 
 
-def next_region(plan, ledger):
+def next_region(plan, ledger, request=None):
     roots = validate_plan(plan)
     completed = validate_ledger(ledger, plan["source_sha256"], roots)
+    if request is not None:
+        sequence = request.get("sequence")
+        if (request.get("schema") != 1 or request.get("enabled") is not True
+                or type(sequence) is not int or sequence <= ledger.get("last_sequence", 0)):
+            raise ValueError("Batch request disabled, repeated or malformed")
     remaining = [r for r in order_roots(roots) if r not in completed]
     if not remaining:
         return {
@@ -85,6 +90,8 @@ def next_region(plan, ledger):
     return {
         "status": "selected", "source_sha256": plan["source_sha256"],
         "root": root, "packages": roots[root],
+        "all_roots": order_roots(roots),
+        "sequence": request["sequence"] if request else None,
         "total_roots": len(roots), "completed_roots": len(completed),
         "remaining_roots": len(remaining),
     }
@@ -124,6 +131,11 @@ def mark_complete(selection, manifest, ledger, run_url):
         raise ValueError("Region already committed; refuse accidental overwrite")
     updated = json.loads(json.dumps(ledger))
     updated["completed"][selection["root"]] = proof
+    sequence = selection.get("sequence")
+    if sequence is not None:
+        if type(sequence) is not int or sequence <= ledger.get("last_sequence",0):
+            raise ValueError("Repeated batch request")
+        updated["last_sequence"] = sequence
     return updated
 
 
@@ -134,9 +146,18 @@ def validate_plan_from_selection(selection):
     packages = selection.get("packages")
     if not isinstance(root, str) or not isinstance(packages, list) or not packages:
         raise ValueError("Bad queue selection")
+    all_roots = selection.get("all_roots")
+    if (not isinstance(all_roots, list) or root not in all_roots
+            or len(set(all_roots)) != len(all_roots)):
+        raise ValueError("Missing global region inventory")
     if any(region_root(n) != root for n in packages):
         raise ValueError("Selected packages cross a root boundary")
-    return {root: packages, **{x: [] for x in selection.get("all_roots", []) if x != root}}
+    for other in all_roots:
+        parts = other.split("/")
+        if (len(parts) != 3 or parts[0] != "8" or
+                any(not n.isdigit() or int(n) >= 256 for n in parts[1:])):
+            raise ValueError("Invalid global region inventory")
+    return {root: packages, **{x: [] for x in all_roots if x != root}}
 
 
 def write_json(path, data):
@@ -151,6 +172,7 @@ def main():
     a.add_argument("--plan", required=True)
     a.add_argument("--ledger", required=True)
     a.add_argument("--output", required=True)
+    a.add_argument("--request", help="Scheduled run request and replay gate")
     b = cmds.add_parser("complete")
     b.add_argument("--selection", required=True)
     b.add_argument("--manifest", required=True)
@@ -161,7 +183,8 @@ def main():
     if args.command == "next":
         plan = json.loads(Path(args.plan).read_text())
         ledger = json.loads(Path(args.ledger).read_text())
-        result = next_region(plan, ledger)
+        request = json.loads(Path(args.request).read_text()) if args.request else None
+        result = next_region(plan, ledger, request)
     else:
         selection = json.loads(Path(args.selection).read_text())
         ledger = json.loads(Path(args.ledger).read_text())

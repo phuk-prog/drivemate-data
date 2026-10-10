@@ -40,11 +40,13 @@ jobs:
           from pathlib import Path
           req=json.loads(Path('docs/regional-batch-request.json').read_text())
           assert req['schema']==1 and isinstance(req['sequence'],int)
-          assert req.get('enabled') is True, 'Bulk regional runs remain disabled until full Manchester and legal gates pass'
+          print('Batch enabled:', req.get('enabled') is True)
           with open(os.environ['GITHUB_OUTPUT'],'a') as output:
               output.write(f"sequence={req['sequence']}\n")
+              output.write(f"enabled={str(req.get('enabled') is True).lower()}\n")
           PY
       - name: Preflight and dependencies
+        if: steps.permission.outputs.enabled == 'true'
         run: |
           set -euo pipefail
           python3 -m pip install -q pmtiles==3.4.1 mapbox-vector-tile==2.2.0
@@ -53,6 +55,7 @@ jobs:
           mkdir -p work/source work/queue
           df -h /
       - name: Download existing verified UK PMTiles source
+        if: steps.permission.outputs.enabled == 'true'
         run: |
           set -euo pipefail
           gh release download map-data-uk --repo "${{ github.repository }}" \
@@ -60,6 +63,7 @@ jobs:
           test "$(stat -c %s work/source/drivemate.pmtiles)" = "$EXPECTED_BYTES"
           echo "$EXPECTED_SHA  work/source/drivemate.pmtiles" | sha256sum --check --strict
       - name: Choose exactly one uncompleted z8 root
+        if: steps.permission.outputs.enabled == 'true'
         id: selection
         run: |
           set -euo pipefail
@@ -68,6 +72,7 @@ jobs:
           python3 scripts/region_batch_queue.py next \
             --plan work/all-plan/regional-plan.json \
             --ledger docs/regional-batch-ledger.json \
+            --request docs/regional-batch-request.json \
             --output work/queue/selection.json
           python3 - <<'PY'
           import json,os
