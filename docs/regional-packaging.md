@@ -90,3 +90,33 @@ outstanding). The source release and Android app remain unchanged. A real
 pilot run's successful results must be observed before its data pipeline
 is considered tested. The experiment remains constrained by the verified
 historical archive, not the newest in-progress UK map build.
+
+
+### Verified first real UK pilot — 10 October 2026
+
+Run [38031100907](https://github.com/phuk-prog/drivemate-data/actions/runs/38031100907)
+**passed** on data commit `7cd5ee2b4550b787cdc8c1ac3280f3c4a34c5219`.
+Actual source: the checksum-verified 1,638,441,575-byte UK PMTiles
+(`8ec2a5cd5e4373a5d75243c1aa46ccb40adb3a8dd9b821f06a3b2c765f9cf069`).
+
+| Verified file | Compressed bytes | Tiles | SHA-256 |
+|---|---:|---:|---|
+| UK base z0–9 | 18,185,774 | 1,063 | `f584f1c2b38bda01292b2e526db52488944cd2608cde17e2bb2081db1a1b33fa` |
+| Manchester detail z10–14 | 116,261,842 | 5,456 | `21f33b60200ba1dfbfa2e46d45bb8ec7f8afe66c826a25e6b3f7476fa07fcd2e` |
+
+All 6,519 expanded addressed tiles were matched to their source IDs
+and compressed payloads by the exporter; both generated archives also
+passed the complete gzip/MVT archive verifier. The 116 MB detail pack is
+below the 200 MB target, but this is **one** example, not proof that all
+UK regions meet it. No map assets were uploaded or installed by the pilot.
+
+Android-side pure selection and boundary tests were committed in
+`phuk-prog/DriveMate` at `6d92e843e2ad80995f967ae621a60d89276ccfe4`.
+**These do not activate the regions, prove renderer compatibility or
+remove Stage 1 publication/licensing blockers.** Do not prematurely
+replace the existing whole-UK map archive or graph.
+
+Next: confirm Android CI, implement checksum-verified package acquisition
+and safe renderer integration on the development branch, check adjacent
+regional seams and missing-region fallback, and run real on-device
+rendering/navigation tests before exposing regional downloads.

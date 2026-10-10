@@ -98,3 +98,17 @@ SHA-256 and writes audit artifacts only (no raw map files, new release,
 download pointer or Android activation). The real pilot remains *testing*
 until that workflow has completed successfully and user-visible renderer
 compatibility has also been validated. See `docs/regional-packaging.md`.
+
+## Evidence checkpoint: first Manchester regional export
+
+The real nonpublishing UK pilot succeeded at data commit `7cd5ee2`:
+1,063 base tiles in 18.19 MB plus 5,456 Manchester detail tiles in
+116.26 MB; all 6,519 tiles matched source, archives fully decoded and
+validated. See [run 38031100907](https://github.com/phuk-prog/drivemate-data/actions/runs/38031100907)
+and `docs/regional-packaging.md`. This marks *regional export pilot
+verified*, NOT Android rendering/integration or Stage 1 complete.
+
+The Android development branch now contains a read-only region package
+selector at commit `6d92e843e2ad80995f967ae621a60d89276ccfe4`;
+exact-source CI and device checks must be confirmed before claiming it
+verified. Preserve production map/download formats until then.
