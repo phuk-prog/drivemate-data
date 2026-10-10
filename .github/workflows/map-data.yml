@@ -607,7 +607,7 @@ jobs:
               'built': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'parts': [p.name for p in parts],
               'source': {
-                  'licence': 'ODbL-1.0', 'attribution': '© OpenStreetMap contributors',
+                  'licence': 'ODbL-1.0', 'license_url': 'https://opendatacommons.org/licenses/odbl/1-0/', 'attribution': '© OpenStreetMap contributors',
                   'url': 'https://download.geofabrik.de/' + os.environ['REGION'] + '-latest.osm.pbf',
                   'sha256': Path('work/source.sha256').read_text().strip(),
                   'retrieved_at': Path('work/source-retrieved.txt').read_text().strip()},
