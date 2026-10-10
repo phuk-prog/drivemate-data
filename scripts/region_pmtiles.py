@@ -1,8 +1,8 @@
 """Make *unpublished* PMTiles base/detail packages from one verified UK archive.
 
-Source is unchanged. Detail tiles z>=9 belong to their single z8 ancestor,
+Source is unchanged. Detail tiles z>=10 belong to their single z8 ancestor,
 with automatic subdivision to z9/z10 when estimated compressed tile bytes
-exceed 200 MB. Low zoom 0..8 lives in one base package.
+exceed 200 MB. Low zoom 0..9 lives in one base package.
 
 This is experimental data packaging, NOT an Android package switch or
 authorization to distribute archives under unreviewed source licences.
@@ -16,8 +16,8 @@ import math
 import mmap
 from pathlib import Path
 
-BASE_MAX_ZOOM = 8
-DETAIL_MIN_ZOOM = 9
+BASE_MAX_ZOOM = 9
+DETAIL_MIN_ZOOM = 10
 REGION_ZOOM = 8
 MAX_SUBDIVISION = 10
 DEFAULT_MAX_BYTES = 200_000_000
@@ -45,27 +45,14 @@ def region_bounds(key):
 def walk_index(fetch, header):
     from pmtiles.tile import deserialize_directory, tileid_to_zxy
     length = header["tile_data_length"]
-    stack = [(header["root_offset"], header["root_length"], 0)]
-    seen = set()
     previous = -1
-    while stack:
-        offset, size, depth = stack.pop()
-        if depth > 4 or (offset, size) in seen:
-            raise ValueError("Malformed/cyclic PMTiles directory")
-        seen.add((offset, size))
-        directories = deserialize_directory(fetch(offset, size))
-        # Reverse order only for pushing child directory entries.
-        for entry in reversed(directories):
-            if entry.run_length == 0:
-                if entry.offset + entry.length > header["leaf_directory_length"]:
-                    raise ValueError("PMTiles directory out of range")
-                stack.append((header["leaf_directory_offset"] + entry.offset, entry.length, depth + 1))
-        # Flatten recursively in correct sorted tile order instead of using stack.
-        # Rebuild ordered rows in each root/leaf hierarchy below.
-        break
+    seen = set()
 
     def traverse(offset, size, depth=0):
         nonlocal previous
+        if (offset, size) in seen:
+            raise ValueError("Repeated or cyclic PMTiles directory reference")
+        seen.add((offset, size))
         if depth > 4:
             raise ValueError("Too many PMTiles directory levels")
         rows = deserialize_directory(fetch(offset, size))
@@ -187,7 +174,7 @@ def build(source, destination, max_bytes=DEFAULT_MAX_BYTES, pilot=None, dry_run=
             "source_sha256": sha256(source), "source_bytes": source.stat().st_size,
             "base_zoom_max": BASE_MAX_ZOOM, "detail_zoom_min": DETAIL_MIN_ZOOM,
             "max_package_bytes": max_bytes, "pilot_root": pilot,
-            "tile_partition": "Each z9+ tile belongs to exactly one z8 parent or subdivided descendant.",
+            "tile_partition": "Each z10+ tile belongs to exactly one z8 parent or subdivided descendant.",
             "licensing": "Unreviewed sources must not be publicly redistributed from this pilot.",
             "candidate_regions": len(region_names) - 1, "packages": {},
         }
@@ -223,7 +210,6 @@ def build(source, destination, max_bytes=DEFAULT_MAX_BYTES, pilot=None, dry_run=
                 if path.stat().st_size > max_bytes and name != "base":
                     path.unlink()
                     raise ValueError(f"Region {name} exceeds {max_bytes} byte cap after writing")
-                readback = Reader(lambda off, count: path.read_bytes()[off:off+count])
                 # Verify archive identity independently by streaming from disk.
                 with path.open("rb") as verify_file, mmap.mmap(verify_file.fileno(),0,access=mmap.ACCESS_READ) as result_map:
                     readback = Reader(lambda off, count: result_map[off:off+count])

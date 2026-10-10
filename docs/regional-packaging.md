@@ -1,7 +1,7 @@
 # DriveMate regional map packaging — implementation pilot
 
-Decision (2026-10-10): **one UK-wide low-zoom PMTiles (z0–8)** plus
-**z9–14 detail packages grouped by z8 Web Mercator parent tiles**.
+Decision (2026-10-10): **one UK-wide low-zoom PMTiles (z0–9)** plus
+**z10–14 detail packages grouped by z8 Web Mercator parent tiles**.
 A z8 tile is 1.40625 degrees wide in longitude; actual ground distance
 varies with latitude. Dense z8 sections are automatically subdivided to
 z9 and if needed z10. Default hard limit **200,000,000 bytes** for each
@@ -31,8 +31,8 @@ python3 scripts/region_pmtiles.py \
 The pilot writes `base.pmtiles`, Manchester-only detail package(s),
 and an unpublished `regional-manifest.json` with SHA-256 and byte lengths.
 It refuses pre-existing output content. Nothing is uploaded or activated in
-Android. All detailed z9–14 tiles have one parent z8 key (or one subdivided
-child); low zoom z0–8 is unique to base. Physical map content is copied
+Android. All detailed z10–14 tiles have one parent z8 key (or one subdivided
+child); low zoom z0–9 is unique to base. Physical map content is copied
 without editing roads, house numbers or polygons.
 
 ### Critical remaining gates
@@ -62,3 +62,11 @@ Only count regional delivery implemented when real (not synthetic) regions
 pass content and renderer tests, compatibility is confirmed on Android,
 boundary transitions work, and a single immutable verified manifest
 and rollback process covers every component.
+
+### Why the base includes zoom 9
+
+Adaptive z8 → z9 → z10 subdivision must never strand a z9 tile in a
+region subdivided below z9. Keeping every z0–9 tile in the nationwide
+base ensures that each tile has exactly one owner. Regional overlays
+then exclusively contain z10–14 tiles. This design refinement does not
+alter the currently installed Android map.

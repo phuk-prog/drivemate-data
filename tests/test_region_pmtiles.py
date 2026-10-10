@@ -27,12 +27,12 @@ class RegionPartitionTests(unittest.TestCase):
         rows=[
             (1,0,0,0,0,30),
             (2,8,126,82,30,30),
-            (3,9,252,164,60,30),
-            (4,9,253,164,90,30),
-            (5,9,254,170,120,30),
+            (3,10,504,328,60,30),
+            (4,10,505,328,90,30),
+            (5,10,508,340,120,30),
         ]
         packs=plan_tile_sets(rows,200)
-        self.assertEqual(4,len(packs["base"]) + len(packs["region-z8-x126-y82"]) + len(packs["region-z8-x127-y85"]) if False else 4)
+        self.assertEqual(2,len(packs["base"]))
         self.assertEqual(2,len(packs["region-z8-x126-y82"]))
         self.assertEqual(1,len(packs["region-z8-x127-y85"]))
         self.assertEqual(5,sum(map(len,packs.values())))
@@ -50,7 +50,7 @@ class RegionPartitionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             plan_tile_sets([(1,8,126,82,0,10)],200)
         with self.assertRaises(ValueError):
-            plan_tile_sets([(1,8,126,82,0,10),(2,9,252,164,10,250)],100)
+            plan_tile_sets([(1,8,126,82,0,10),(2,10,504,328,10,250)],100)
 
     def test_writing_pilot_pmtiles_preserves_compressed_payload(self):
         from pmtiles.writer import write
@@ -61,9 +61,9 @@ class RegionPartitionTests(unittest.TestCase):
             cells=[
                 (0,0,0,b"base"),
                 (8,126,82,b"boundary"),
-                (9,252,164,b"manchester-west"),
-                (9,253,164,b"manchester-east"),
-                (9,254,170,b"london"),
+                (10,504,328,b"manchester-west"),
+                (10,505,328,b"manchester-east"),
+                (10,508,340,b"london"),
             ]
             cells.sort(key=lambda v:zxy_to_tileid(*v[:3]))
             with write(str(path)) as out:
@@ -83,8 +83,8 @@ class RegionPartitionTests(unittest.TestCase):
                 data=f.read()
             reader=Reader(lambda a,b:data[a:a+b])
             self.assertEqual(gzip.compress(b"manchester-west",mtime=0),
-                             reader.get(9,252,164))
-            self.assertIsNone(reader.get(9,254,170))
+                             reader.get(10,504,328))
+            self.assertIsNone(reader.get(10,508,340))
             self.assertEqual(2,reader.header()["addressed_tiles_count"])
 
 

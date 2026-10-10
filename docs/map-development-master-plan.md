@@ -75,8 +75,8 @@ Current correction preflight target: 91 unit tests and five generator selftests.
 ## Approved regional packaging architecture — 10 October 2026
 
 User approved choosing optimal section sizes and implementing. Decision:
-low-zoom (z0–8) nationwide base + Web Mercator z8-parent detail packages
-(z9–14) subdivided to z9/z10 in dense areas. Maximum detailed archive size
+low-zoom (z0–9) nationwide base + Web Mercator z8-parent detail packages
+(z10–14) subdivided to z9/z10 in dense areas. Maximum detailed archive size
 200,000,000 bytes as a testable initial bound. Local Manchester z8/126/82
 pilot first; source/consumer compatibility preserved. **Stage 6 packaging
 foundation has been brought forward without claiming Stage 1 complete.**
