@@ -4,8 +4,6 @@ Byte integrity is not proof of geographical completeness or legal correctness.
 GitHub pointer replacement is recoverable, not atomic. Old chunks are retained.
 """
 import argparse
-import gzip
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -13,6 +11,7 @@ import tempfile
 
 from publish_map_data import (GitHub, GitHubError, checked_name, metadata,
                               verify_inventory, write_json)
+from graph_archive import validate as validate_graph_archive
 
 LEGACY = 'routing-uk'
 POINTER = 'routing-uk.json'
@@ -106,15 +105,8 @@ def publish(github, out, tag):
                         stream.write(block)
         if document.get('download_bytes') != joined.stat().st_size:
             raise ValueError('Compressed byte count differs')
-        result, size = hashlib.sha256(), 0
-        with gzip.open(joined, 'rb') as stream:
-            for block in iter(lambda: stream.read(1024 * 1024), b''):
-                size += len(block)
-                if size > document['bytes']:
-                    raise ValueError('Graph exceeds declared size')
-                result.update(block)
-        if size != document['bytes'] or result.hexdigest() != document['sha256']:
-            raise ValueError('Graph integrity verification failed')
+        validate_graph_archive(joined, compressed=True, expected_bytes=document['bytes'],
+                               expected_sha256=document['sha256'])
         document['generation'] = tag
         document['part_metadata'] = {name: metadata(path, tag) for name, path in files.items()}
         candidate = write_json(temporary, POINTER, document)

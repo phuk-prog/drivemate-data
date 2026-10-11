@@ -35,6 +35,33 @@ CI [38180431821](https://github.com/phuk-prog/drivemate-data/actions/runs/381804
 with 307 tests. A follow-up regression additionally handles damaged DEFLATE
 blocks as a recorded validation error rather than an uncaught exception.
 
+### Graph extract compatibility and recovery gate
+
+`graph_archive.py` now validates the complete TAR container without writing or
+extracting members. It checks nonempty regular graph tiles, unique safe paths,
+the native Valhalla 3.6.3 `index.bin` records (offset, graph ID and byte length),
+their one-to-one correspondence with tiles, and the decoded SHA-256/byte count.
+The routing publisher performs this gate before any remote write; matching
+hashes of arbitrary non-graph content cannot qualify for promotion. Existing
+pointer-failure recovery and immutable-generation protections remain in place.
+Validation-only builds run the same standalone checker and retain its report.
+
+Actual evidence is the previously downloaded graph generation
+`routing-uk-20261009-r37969596182-a1`, **not** a newly built or newest graph:
+2,800,936,960 bytes, SHA-256
+`4d88c7d2fca0b6dfc4f79cf09a128595d61f198da2b55942e123e5c7c9f729f3`,
+1,341 verified index entries/tiles (17 level-0, 70 level-1, 1,254 level-2).
+Report: `docs/validation/graph-extract-integrity-20261011.json`.
+Six container regressions and one publisher regression cover bad containers,
+unsafe/duplicate paths, forged index offsets/IDs/sizes, truncation and size/hash
+mismatches. The existing promotion-recovery tests still pass.
+
+This gate establishes extract structure; it does not decode every native tile,
+prove nationwide legal routing, demonstrate Android runtime acceptance of a new
+generation, or test remote recovery after process/power loss. Required device,
+replay and human road-evidence gates remain outstanding. Previously published
+archives remain untouched; no stage is marked completed from this source work.
+
 Updated 2026-10-10. Budget: £20 one-off maximum; no spending or paid services enabled.
 Development stays on `codex/architecture-foundation`, existing draft PR #3 in each repository.
 

@@ -1,6 +1,9 @@
 import gzip
 import hashlib
 import json
+import io
+import tarfile
+import struct
 from pathlib import Path
 import sys
 import tempfile
@@ -16,7 +19,14 @@ class RoutingPublicationTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.out = Path(self.temporary.name)
-        payload = b'graph-fixture' * 100
+        container = io.BytesIO()
+        with tarfile.open(fileobj=container, mode='w') as archive:
+            tile = b'graph-fixture' * 100
+            for name, contents in [('index.bin', struct.pack('<QII', 1536, 3014 * 8, len(tile))), ('0/003/014.gph', tile)]:
+                entry = tarfile.TarInfo(name)
+                entry.size = len(contents)
+                archive.addfile(entry, io.BytesIO(contents))
+        payload = container.getvalue()
         packed = gzip.compress(payload)
         self.name = 'valhalla-uk-test.tar.gz.part00'
         (self.out / self.name).write_bytes(packed)
@@ -89,6 +99,16 @@ class RoutingPublicationTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.publish()
             self.document[field] = original
+        self.assertEqual(self.github.actions, [])
+
+    def test_hash_correct_arbitrary_payload_never_publishes(self):
+        payload = b'not-a-valhalla-container'
+        packed = gzip.compress(payload)
+        (self.out / self.name).write_bytes(packed)
+        self.document.update(bytes=len(payload), download_bytes=len(packed),
+                             sha256=hashlib.sha256(payload).hexdigest())
+        with self.assertRaises(ValueError):
+            self.publish()
         self.assertEqual(self.github.actions, [])
 
 

@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "bytes": 2800936960,
+  "sha256": "4d88c7d2fca0b6dfc4f79cf09a128595d61f198da2b55942e123e5c7c9f729f3",
+  "tile_members": 1341,
+  "by_level": {
+    "0": 17,
+    "1": 70,
+    "2": 1254
+  },
+  "index_bytes": 21456,
+  "index_entries_verified": 1341,
+  "scope": "TAR/extract structure and fingerprint; runtime routes and legal correctness require separate tests"
+}

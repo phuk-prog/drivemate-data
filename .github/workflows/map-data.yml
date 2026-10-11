@@ -541,6 +541,10 @@ jobs:
             --graph work/uk.tar --report work/routing-connectivity.json
           cat work/routing-connectivity.json >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Validate complete graph extract structure without publication
+        run: |
+          python3 scripts/graph_archive.py work/uk.tar --out work/graph-archive.json
+
       - name: Publish the road graph
         if: github.event_name != 'workflow_dispatch' || inputs.validate_only == false
         env:
@@ -590,5 +594,6 @@ jobs:
           if-no-files-found: warn
           path: |
             work/routing-connectivity.json
+            work/graph-archive.json
             work/source.sha256
             work/source-retrieved.txt
