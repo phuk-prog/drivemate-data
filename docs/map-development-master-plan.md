@@ -79,6 +79,22 @@ manifest-only check**. Actual full-container evidence above remains tied to
 the explicitly older generation. Android's existing ordered-part format and
 engine identity are preserved.
 
+### Exact-graph connectivity evidence
+
+`routing_connectivity.py` now fingerprints the tested graph before and after
+the native route calls and refuses to emit a success report if graph bytes
+change. Reports identify graph SHA-256, byte count, engine and schema. Three
+new deterministic tests cover exact identity, same-size graph replacement and
+a missing graph without invoking an actor.
+
+Actual pyvalhalla 3.6.3 repeat: **11/11** public regional driving probes found
+routes, zero investigations, on the same explicitly older graph identified
+above. New bound evidence: `docs/validation/uk-connectivity-bound-20261011.json`.
+This includes England, Scotland, Wales, Northern Ireland and a Wales–England
+cross-border corridor; it is neither a full connected-component survey nor
+proof of turn legality. Extra diagnostics remain informational, preserving
+the existing six mandatory release smoke routes and Android/device gates.
+
 Updated 2026-10-10. Budget: £20 one-off maximum; no spending or paid services enabled.
 Development stays on `codex/architecture-foundation`, existing draft PR #3 in each repository.
 

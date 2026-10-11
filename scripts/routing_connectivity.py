@@ -10,6 +10,7 @@ import json
 import math
 from pathlib import Path
 import tempfile
+from source_inventory import fingerprint
 
 # Different long-distance corridors, cross-border routes and nations.
 EXTRA_PROBES = {
@@ -75,21 +76,37 @@ def evaluate(actor, probes=EXTRA_PROBES):
     }
 
 
+def evaluate_file(graph, runner):
+    """Bind diagnostics to exactly the graph read by the supplied native runner."""
+    graph = Path(graph)
+    before = fingerprint(graph)
+    if before is None:
+        raise ValueError("Cannot test missing or symlinked UK graph")
+    report = runner(graph)
+    if fingerprint(graph) != before:
+        raise ValueError("Graph changed while routing diagnostics ran")
+    report.update(schema=2, graph_sha256=before['sha256'], graph_bytes=before['bytes'])
+    return report
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--graph", required=True)
     p.add_argument("--report", required=True)
     args = p.parse_args()
     from valhalla import Actor, get_config
-    graph = Path(args.graph)
-    if not graph.is_file():
-        raise ValueError("Cannot test missing UK graph")
+    import importlib.metadata
+    if importlib.metadata.version('pyvalhalla') != '3.6.3':
+        raise ValueError("Connectivity diagnostics require pyvalhalla 3.6.3")
     # pyvalhalla resolves tile_dir strictly even when using a tile extract.
     # Do not depend on a caller having created a neighbouring empty directory.
-    with tempfile.TemporaryDirectory(prefix='drivemate-connectivity-') as directory:
-        actor = Actor(get_config(tile_extract=str(graph), tile_dir=directory,
-                                 verbose=False))
-        report = evaluate(actor)
+    def run_native(graph):
+        with tempfile.TemporaryDirectory(prefix='drivemate-connectivity-') as directory:
+            actor = Actor(get_config(tile_extract=str(graph), tile_dir=directory,
+                                     verbose=False))
+            return evaluate(actor)
+    report = evaluate_file(args.graph, run_native)
+    report['engine'] = 'valhalla-3.6.3'
     Path(args.report).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n",
                                  encoding="utf-8")
     print(f"Extra UK connectivity diagnostics: {report['route_found']}/{report['checked']} routes found; "

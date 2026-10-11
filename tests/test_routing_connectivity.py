@@ -3,9 +3,11 @@ import json
 import pathlib
 import sys
 import unittest
+import hashlib
+import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
-from routing_connectivity import crow_km, check_route, evaluate
+from routing_connectivity import crow_km, check_route, evaluate, evaluate_file
 
 
 class FakeActor:
@@ -40,6 +42,32 @@ class ConnectivityTests(unittest.TestCase):
     def test_long_detour_flagged(self):
         case = check_route(FakeActor(ratio=6.0), "Test", (53.4, -2.2), (53.7, -1.8))
         self.assertEqual("investigate", case["status"])
+
+    def test_diagnostic_proof_names_exact_graph(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / 'graph.tar'
+            path.write_bytes(b'synthetic graph')
+            report = evaluate_file(path, lambda _: evaluate(FakeActor()))
+            self.assertEqual(report['graph_sha256'], hashlib.sha256(path.read_bytes()).hexdigest())
+            self.assertEqual(report['graph_bytes'], path.stat().st_size)
+
+    def test_rejects_graph_changed_during_diagnostics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / 'graph.tar'
+            path.write_bytes(b'before')
+            def changed(graph):
+                graph.write_bytes(b'after!')  # same length; byte hashing still catches replacement
+                return evaluate(FakeActor())
+            with self.assertRaises(ValueError):
+                evaluate_file(path, changed)
+
+    def test_missing_graph_never_runs_actor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / 'missing.tar'
+            called = []
+            with self.assertRaises(ValueError):
+                evaluate_file(path, lambda _: called.append(True))
+            self.assertEqual(called, [])
 
 
 if __name__ == "__main__":
