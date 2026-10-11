@@ -7,6 +7,7 @@ import sys
 from coverage_audit import audit as audit_coverage
 from source_inventory import read as read_source_inventory
 import places_provenance
+from search_integrity import audit as audit_search
 from publication_consistency import snapshot_assets, read_report, verify_map_archive_report
 
 out = Path(sys.argv[1])
@@ -69,6 +70,9 @@ metrics = {
 }
 errors = list(regional_coverage["errors"])
 warnings = list(regional_coverage["warnings"])
+search_integrity = audit_search(out / "search-offline-uk.tsv.gz")
+metrics["offline_search_records"] = search_integrity["records_checked"]
+errors.extend("Offline search invalid: " + error for error in search_integrity["errors"])
 try:
     source_inventory = read_source_inventory(out / "source-inventory.json")
     for item in source_inventory["sources"]:
@@ -109,6 +113,7 @@ minimums = {
     "place_bytes": 5_000_000,
     "camera_items": 100,
     "offline_search_bytes": 1_000_000,
+    "offline_search_records": 100_000,
 }
 for key, minimum in minimums.items():
     if metrics[key] < minimum:
@@ -121,7 +126,7 @@ if previous_path and previous_path.exists():
     except Exception as e:
         warnings.append(f"previous quality file unreadable: {e}")
 
-stable = ("map_bytes","lane_files","lane_ways","limit_files","limit_ways","roadinfo_files","roadinfo_items","place_files","place_bytes","camera_items","offline_search_bytes")
+stable = ("map_bytes","lane_files","lane_ways","limit_files","limit_ways","roadinfo_files","roadinfo_items","place_files","place_bytes","camera_items","offline_search_bytes","offline_search_records")
 for key in stable:
     old = previous.get(key)
     new = metrics[key]
@@ -147,6 +152,7 @@ report = {
     "version": 1,
     "metrics": metrics,
     "nation_tile_probes": regional_coverage,
+    "offline_search_integrity": search_integrity,
     "asset_snapshot": asset_snapshot,
     "errors": errors,
     "warnings": warnings,

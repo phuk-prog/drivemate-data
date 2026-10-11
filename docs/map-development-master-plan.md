@@ -1,5 +1,35 @@
 # DriveMate development register
 
+## Current continuation — 11 October 2026
+
+Live foundation HEAD was `a446223222fc31847c778b5c48355a09966f7999` when inspected.
+PR #3 is now merged; earlier draft-PR and starting-state entries below are historical.
+The existing development branch is reused without a main merge or publication.
+
+| Task | Status | Measurable acceptance and evidence |
+|---|---|---|
+| Validate entire offline search asset | Verified | `search_integrity.py` streams every row and checks header/schema/date/credits, six fields, normalised sorted keys, supported types, finite UK-envelope coordinates, UTF-8 and gzip footer/CRC. Header-only, unsorted, truncated, invalid-coordinate and malformed fixtures must fail. The latest published asset has 2,768,087 valid records; its SHA-256 matches the manifest. Evidence: `docs/validation/offline-search-integrity-20261011.json` |
+| Bind search validation into complete-build gate | Implemented, locally verified | `validate_build.py` records the search fingerprint/counts and rejects audit errors or fewer than 100,000 records for a complete UK build, alongside the existing size and exact-asset publication gates. A full UK build is not repeated merely to test source changes |
+
+Actual source: `map-data-20261011-r38120645154-a1` manifest references the
+search file in its `-extra` companion release. Downloaded 31,553,418 bytes;
+SHA-256 `4a5e6b473cbfe2991622fab7ab7ed6f9855dddaa0e0ff34a3eff969a88ae06ac`.
+The source build [38120645154](https://github.com/phuk-prog/drivemate-data/actions/runs/38120645154)
+passed at the existing HEAD; it predates this stronger search gate.
+
+This verifies data structure and ordering, not exact property addresses,
+NI postcode completeness, human road safety or independent licence clearance.
+OSNI optional feeds, Mapillary permissions and unavailable live integrations
+remain conditional/inactive rather than blocking independent integrity work.
+No stage is newly marked completed; remaining legal/data/device gates are preserved.
+
+Local canonical preflight: 307 unit tests, zero failures/errors/skips; all five
+generator selftests and source/workflow gates pass. Eight new search-integrity
+regressions are included. Replaying the existing 20 Greater Manchester search
+queries against the same downloaded asset produced 19 passes and one documented
+misspelling limitation (`Stokport`), with zero unexpected failures. Evidence:
+`docs/validation/offline-search-acceptance-20261011.json`.
+
 Updated 2026-10-10. Budget: £20 one-off maximum; no spending or paid services enabled.
 Development stays on `codex/architecture-foundation`, existing draft PR #3 in each repository.
 

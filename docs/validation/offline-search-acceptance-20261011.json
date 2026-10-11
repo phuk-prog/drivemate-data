@@ -1,0 +1,415 @@
+{
+  "results": [
+    {
+      "query": "SK8 2EZ",
+      "status": "PASS",
+      "detail": "result 1 is 7 m from expected point",
+      "note": "postcodes.io",
+      "top3": [
+        {
+          "name": "SK8 2EZ",
+          "address": "Cheadle",
+          "lat": 53.3954,
+          "lon": -2.1942,
+          "type": "P"
+        }
+      ]
+    },
+    {
+      "query": "sk82ez",
+      "status": "PASS",
+      "detail": "result 1 is 7 m from expected point",
+      "note": "no space, lower case",
+      "top3": [
+        {
+          "name": "SK8 2EZ",
+          "address": "Cheadle",
+          "lat": 53.3954,
+          "lon": -2.1942,
+          "type": "P"
+        }
+      ]
+    },
+    {
+      "query": "SK1 1LH",
+      "status": "PASS",
+      "detail": "result 1 is 4 m from expected point",
+      "note": "Stockport, postcodes.io",
+      "top3": [
+        {
+          "name": "SK1 1LH",
+          "address": "Stockport",
+          "lat": 53.4117,
+          "lon": -2.1578,
+          "type": "P"
+        }
+      ]
+    },
+    {
+      "query": "SK4 2JZ",
+      "status": "PASS",
+      "detail": "result 1 is 8 m from expected point",
+      "note": "Heaton Mersey area, postcodes.io",
+      "top3": [
+        {
+          "name": "SK4 2JZ",
+          "address": "Stockport",
+          "lat": 53.4064,
+          "lon": -2.1848,
+          "type": "P"
+        }
+      ]
+    },
+    {
+      "query": "SK7 1AA",
+      "status": "PASS",
+      "detail": "result 1 is 1 m from expected point",
+      "note": "Bramhall, postcodes.io",
+      "top3": [
+        {
+          "name": "SK7 1AA",
+          "address": "Bramhall",
+          "lat": 53.3564,
+          "lon": -2.1655,
+          "type": "P"
+        }
+      ]
+    },
+    {
+      "query": "M1 1AE",
+      "status": "PASS",
+      "detail": "result 1 is 2 m from expected point",
+      "note": "Manchester centre, postcodes.io",
+      "top3": [
+        {
+          "name": "M1 1AE",
+          "address": "Manchester",
+          "lat": 53.4835,
+          "lon": -2.2312,
+          "type": "P"
+        }
+      ]
+    },
+    {
+      "query": "M2 5DB",
+      "status": "PASS",
+      "detail": "result 1 is 3 m from expected point",
+      "note": "Manchester centre, postcodes.io",
+      "top3": [
+        {
+          "name": "M2 5DB",
+          "address": "Manchester",
+          "lat": 53.4793,
+          "lon": -2.2446,
+          "type": "P"
+        }
+      ]
+    },
+    {
+      "query": "M13 9PL",
+      "status": "PASS",
+      "detail": "result 1 is 3 m from expected point",
+      "note": "Oxford Road, postcodes.io",
+      "top3": [
+        {
+          "name": "M13 9PL",
+          "address": "Manchester",
+          "lat": 53.4669,
+          "lon": -2.2336,
+          "type": "P"
+        }
+      ]
+    },
+    {
+      "query": "M32 0TT",
+      "status": "PASS",
+      "detail": "result 1 is 7 m from expected point",
+      "note": "Old Trafford, postcodes.io",
+      "top3": [
+        {
+          "name": "M32 0TT",
+          "address": "Stretford",
+          "lat": 53.4521,
+          "lon": -2.2939,
+          "type": "P"
+        }
+      ]
+    },
+    {
+      "query": "M90 1QX",
+      "status": "PASS",
+      "detail": "result 1 is 3 m from expected point",
+      "note": "Manchester Airport, postcodes.io",
+      "top3": [
+        {
+          "name": "M90 1QX",
+          "address": "Manchester",
+          "lat": 53.3619,
+          "lon": -2.2708,
+          "type": "P"
+        }
+      ]
+    },
+    {
+      "query": "Menai Grove",
+      "status": "PASS",
+      "detail": "result 1 is 15 m from expected point",
+      "note": "street holding SK8 2EZ",
+      "top3": [
+        {
+          "name": "Menai Grove",
+          "address": "Cheadle, SK8",
+          "lat": 53.3956,
+          "lon": -2.1942,
+          "type": "R"
+        },
+        {
+          "name": "Menai Grove",
+          "address": "Stoke-on-Trent, ST3",
+          "lat": 52.9941,
+          "lon": -2.1337,
+          "type": "R"
+        }
+      ]
+    },
+    {
+      "query": "Stockport",
+      "status": "PASS",
+      "detail": "result 1 is 619 m from expected point",
+      "note": "town centre",
+      "top3": [
+        {
+          "name": "Stockport",
+          "address": "Stockport, SK3",
+          "lat": 53.4061,
+          "lon": -2.163,
+          "type": "N"
+        },
+        {
+          "name": "Stockport",
+          "address": "Stockport, SK1",
+          "lat": 53.408,
+          "lon": -2.159,
+          "type": "T"
+        },
+        {
+          "name": "Stockport Road",
+          "address": "Stockport, SK3",
+          "lat": 53.3989,
+          "lon": -2.197,
+          "type": "R"
+        }
+      ]
+    },
+    {
+      "query": "Cheadle Hulme",
+      "status": "PASS",
+      "detail": "result 1 is 312 m from expected point",
+      "note": "village centre",
+      "top3": [
+        {
+          "name": "Cheadle Hulme",
+          "address": "Stockport, SK8",
+          "lat": 53.3758,
+          "lon": -2.1884,
+          "type": "T"
+        },
+        {
+          "name": "Cheadle Hulme",
+          "address": "Cheadle Hulme, SK8",
+          "lat": 53.3752,
+          "lon": -2.1882,
+          "type": "N"
+        },
+        {
+          "name": "Cheadle Hulme High School",
+          "address": "Cheadle Hulme, SK8",
+          "lat": 53.3639,
+          "lon": -2.1857,
+          "type": "E"
+        }
+      ]
+    },
+    {
+      "query": "Altrincham",
+      "status": "PASS",
+      "detail": "result 1 is 158 m from expected point",
+      "note": "town centre",
+      "top3": [
+        {
+          "name": "Altrincham",
+          "address": "Trafford, WA14",
+          "lat": 53.3881,
+          "lon": -2.3515,
+          "type": "T"
+        },
+        {
+          "name": "Altrincham Road",
+          "address": "Gatley, SK8",
+          "lat": 53.3946,
+          "lon": -2.2415,
+          "type": "R"
+        },
+        {
+          "name": "Altrincham Road",
+          "address": "Wythenshawe, M23",
+          "lat": 53.3992,
+          "lon": -2.2702,
+          "type": "R"
+        }
+      ]
+    },
+    {
+      "query": "Piccadilly",
+      "status": "PASS",
+      "detail": "result 1 is 130 m from expected point",
+      "note": "Manchester Piccadilly; driver in Manchester",
+      "top3": [
+        {
+          "name": "Piccadilly",
+          "address": "Manchester, M1",
+          "lat": 53.4807,
+          "lon": -2.2351,
+          "type": "R"
+        },
+        {
+          "name": "Piccadilly",
+          "address": "Stockport, SK1",
+          "lat": 53.4072,
+          "lon": -2.1576,
+          "type": "R"
+        },
+        {
+          "name": "Piccadilly",
+          "address": "Bradford, BD1",
+          "lat": 53.7957,
+          "lon": -1.7538,
+          "type": "R"
+        }
+      ]
+    },
+    {
+      "query": "Didsbury",
+      "status": "PASS",
+      "detail": "result 1 is 43 m from expected point",
+      "note": "village centre",
+      "top3": [
+        {
+          "name": "Didsbury",
+          "address": "Manchester, M20",
+          "lat": 53.4175,
+          "lon": -2.2304,
+          "type": "S"
+        },
+        {
+          "name": "Didsbury Road",
+          "address": "Stockport, SK4",
+          "lat": 53.4131,
+          "lon": -2.1937,
+          "type": "R"
+        },
+        {
+          "name": "Didsbury Road Primary School",
+          "address": "Stockport, SK4",
+          "lat": 53.412,
+          "lon": -2.2,
+          "type": "E"
+        }
+      ]
+    },
+    {
+      "query": "Bramhall",
+      "status": "PASS",
+      "detail": "result 1 is 931 m from expected point",
+      "note": "village centre",
+      "top3": [
+        {
+          "name": "Bramhall",
+          "address": "Stockport, SK7",
+          "lat": 53.363,
+          "lon": -2.1623,
+          "type": "T"
+        },
+        {
+          "name": "Bramhall",
+          "address": "Bramhall, SK7",
+          "lat": 53.3602,
+          "lon": -2.1624,
+          "type": "N"
+        },
+        {
+          "name": "Bramhall Lane",
+          "address": "Stockport, SK3",
+          "lat": 53.3905,
+          "lon": -2.1531,
+          "type": "R"
+        }
+      ]
+    },
+    {
+      "query": "Sale",
+      "status": "PASS",
+      "detail": "result 1 is 57 m from expected point",
+      "note": "town; short name, several matches",
+      "top3": [
+        {
+          "name": "Sale",
+          "address": "Trafford, M33",
+          "lat": 53.4252,
+          "lon": -2.3228,
+          "type": "T"
+        },
+        {
+          "name": "Sale Road",
+          "address": "Wythenshawe, M23",
+          "lat": 53.4113,
+          "lon": -2.2782,
+          "type": "R"
+        },
+        {
+          "name": "Sale Road",
+          "address": "Sale, M33",
+          "lat": 53.4151,
+          "lon": -2.2879,
+          "type": "R"
+        }
+      ]
+    },
+    {
+      "query": "Oxford Road",
+      "status": "PASS",
+      "detail": "result 1 is 111 m from expected point",
+      "note": "Manchester Oxford Road",
+      "top3": [
+        {
+          "name": "Oxford Road",
+          "address": "Manchester, M13",
+          "lat": 53.4659,
+          "lon": -2.2335,
+          "type": "R"
+        },
+        {
+          "name": "Oxford Road",
+          "address": "Salford, M6",
+          "lat": 53.4959,
+          "lon": -2.324,
+          "type": "R"
+        },
+        {
+          "name": "Oxford Road",
+          "address": "Eccles, M6",
+          "lat": 53.4955,
+          "lon": -2.327,
+          "type": "R"
+        }
+      ]
+    },
+    {
+      "query": "Stokport",
+      "status": "KNOWN-FAIL",
+      "detail": "no suitable result in top 1",
+      "note": "KNOWN: misspelling. Search is prefix-only with no fuzzy matching, so this finds nothing.",
+      "top3": []
+    }
+  ]
+}

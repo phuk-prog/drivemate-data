@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "records_checked": 2768087,
+  "by_type": {
+    "R": 940623,
+    "H": 13087,
+    "V": 15488,
+    "S": 10917,
+    "N": 3375,
+    "M": 5536,
+    "E": 30065,
+    "P": 1743127,
+    "O": 3023,
+    "T": 1437,
+    "C": 78,
+    "F": 444,
+    "A": 373,
+    "B": 343,
+    "U": 171
+  },
+  "errors": [],
+  "scope": "Full file format and ordering; not postal-address completeness or licensing clearance",
+  "asset": {
+    "bytes": 31553418,
+    "sha256": "4a5e6b473cbfe2991622fab7ab7ed6f9855dddaa0e0ff34a3eff969a88ae06ac"
+  },
+  "build_date": "2026-10-11"
+}
