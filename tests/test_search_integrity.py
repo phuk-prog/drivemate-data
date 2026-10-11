@@ -57,6 +57,13 @@ class SearchIntegrityTests(unittest.TestCase):
             path.write_bytes(gzip.compress(HEADER.encode() + b"\xff\n"))
             self.assertTrue(audit(path)["errors"])
 
+    def test_invalid_deflate_is_reported_without_crashing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "index.gz"
+            # Valid gzip header followed by the forbidden DEFLATE block type 3.
+            path.write_bytes(bytes.fromhex("1f8b0800000000000003") + b"\x07" + bytes(8))
+            self.assertTrue(audit(path)["errors"])
+
     def test_rejects_missing_and_symlinked_file(self):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "missing.gz"

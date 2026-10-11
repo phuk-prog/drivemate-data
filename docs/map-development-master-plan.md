@@ -23,12 +23,17 @@ OSNI optional feeds, Mapillary permissions and unavailable live integrations
 remain conditional/inactive rather than blocking independent integrity work.
 No stage is newly marked completed; remaining legal/data/device gates are preserved.
 
-Local canonical preflight: 307 unit tests, zero failures/errors/skips; all five
-generator selftests and source/workflow gates pass. Eight new search-integrity
+Local canonical preflight: 308 unit tests, zero failures/errors/skips; all five
+generator selftests and source/workflow gates pass. Nine new search-integrity
 regressions are included. Replaying the existing 20 Greater Manchester search
 queries against the same downloaded asset produced 19 passes and one documented
 misspelling limitation (`Stokport`), with zero unexpected failures. Evidence:
 `docs/validation/offline-search-acceptance-20261011.json`.
+
+Commit `8726e4d0164071c0da4b1958db596c42343d680e` passed exact-source
+CI [38180431821](https://github.com/phuk-prog/drivemate-data/actions/runs/38180431821)
+with 307 tests. A follow-up regression additionally handles damaged DEFLATE
+blocks as a recorded validation error rather than an uncaught exception.
 
 Updated 2026-10-10. Budget: £20 one-off maximum; no spending or paid services enabled.
 Development stays on `codex/architecture-foundation`, existing draft PR #3 in each repository.

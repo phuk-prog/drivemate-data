@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 import re
+import zlib
 
 TYPES = set("PCTNRSVHOBAFMEU")
 MAX_LINE = 16384
@@ -59,7 +60,7 @@ def audit(path):
                 report["by_type"][typ] = report["by_type"].get(typ, 0) + 1
         if not report["records_checked"]:
             raise ValueError("Search file contains no records")
-    except (OSError, EOFError, ValueError, UnicodeError) as exc:
+    except (OSError, EOFError, ValueError, UnicodeError, zlib.error) as exc:
         report["errors"].append(str(exc))
     return report
 
