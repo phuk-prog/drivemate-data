@@ -112,6 +112,30 @@ their rows. Real OSNI files were not retrieved in this work; prior HTTP 403 and
 field-schema/coverage limitations remain recorded. No postcode dataset was added,
 no permissions were inferred from a hash, and no mandatory feed was introduced.
 
+### Exact-source verification ledger (11 October)
+
+| Verified commit | Task | Local canonical tests | Exact-source GitHub evidence |
+|---|---|---:|---|
+| `8726e4d0164071c0da4b1958db596c42343d680e` | Complete offline search audit/gate | 307 | [38180431821](https://github.com/phuk-prog/drivemate-data/actions/runs/38180431821), passed |
+| `34de771d04eebdc5d4882e66e01a5013bdf089a6` | Invalid DEFLATE regression | 308 | [38180494753](https://github.com/phuk-prog/drivemate-data/actions/runs/38180494753), passed |
+| `5daa580f03bd6c3e7d3e7d17931983c5abbaf85a` | Complete graph extract/index gate | 315 | [38180854084](https://github.com/phuk-prog/drivemate-data/actions/runs/38180854084), passed |
+| `c4a960d528cc3559caf9ce45891da5e07b3b77be` | Routing manifest coherence | 319 | [38180999048](https://github.com/phuk-prog/drivemate-data/actions/runs/38180999048), passed |
+| `a45f4b9dabbdec58513cf6e550b2c75131e3221e` | Exact-graph diagnostic identity | 322 | [38181141719](https://github.com/phuk-prog/drivemate-data/actions/runs/38181141719), passed |
+| `bb1030ab62e14fe0c08c541c0efb25713214c627` | Optional OSNI observed-input inventory | 328 | [38181365217](https://github.com/phuk-prog/drivemate-data/actions/runs/38181365217), passed |
+
+Each local canonical run had zero failures, errors and skips, and all five
+generator selftests passed. Foundation pushes started only serialized source
+validation. No production pointer, map publication, full UK build or main merge
+was initiated by these changes.
+
+Outstanding gates remain explicit: Android runtime acceptance/performance of
+the relevant real UK generation; remote/power-loss publication recovery beyond
+the existing fault-injection regressions; actual optional NI input field/coverage
+verification; LPS permission before distributing restricted NI postcode data;
+human evidence for precise lane transitions/legal restrictions; and required
+application replay/device/robot checks for any APK. Continue independently with
+source and package preparations while conditional features stay inactive.
+
 Updated 2026-10-10. Budget: £20 one-off maximum; no spending or paid services enabled.
 Development stays on `codex/architecture-foundation`, existing draft PR #3 in each repository.
 
