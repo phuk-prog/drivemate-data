@@ -8,6 +8,12 @@ Do not interpret the historical research below as permission to re-enable
 Mapillary by adding a token. NI postcode redistribution still awaits written
 LPS permission; permitted street/place gazetteers are a separate source.
 
+The build now optionally fingerprints observed OSNI gazetteer CSV/GeoJSON files
+using `source_inventory.py --osni-sources`, including declared OGL/LPS notices,
+dataset origins and sanitised resource URLs. Absent feeds are recorded explicitly;
+presence is not proof of incorporation or nationwide/address coverage. Existing
+inventories without this optional section remain readable.
+
 This is an engineering inventory of primary-source terms, not a blanket grant of
 rights or a claim that every existing published feature is cleared. No new live
 map publication is authorised by a passing fingerprint check.

@@ -95,6 +95,23 @@ cross-border corridor; it is neither a full connected-component survey nor
 proof of turn legality. Extra diagnostics remain informational, preserving
 the existing six mandatory release smoke routes and Android/device gates.
 
+### Northern Ireland gazetteer input reproducibility
+
+The optional OSNI streets/places inputs were missing from source fingerprints.
+`source_inventory.py --osni-sources work/osni` now records each observed CSV or
+GeoJSON hash/size, declared OGL/LPS attribution, dataset origin and a sanitised
+download URL when available. The build captures that URL only after a successful
+download. Query strings/fragments are removed and credential-bearing URLs,
+symlinks and ambiguous duplicate input formats are rejected. Existing schema-1
+inventories without the new optional section remain readable.
+
+Measurable acceptance: six deterministic provenance regressions pass; complete
+build quality reports explicitly warn when either optional gazetteer is absent.
+This inventories observed files, **not** whether the search reader accepted
+their rows. Real OSNI files were not retrieved in this work; prior HTTP 403 and
+field-schema/coverage limitations remain recorded. No postcode dataset was added,
+no permissions were inferred from a hash, and no mandatory feed was introduced.
+
 Updated 2026-10-10. Budget: £20 one-off maximum; no spending or paid services enabled.
 Development stays on `codex/architecture-foundation`, existing draft PR #3 in each repository.
 

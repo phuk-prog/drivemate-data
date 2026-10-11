@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+from urllib.parse import urlsplit, urlunsplit
 
 SOURCES = {
     "osm_uk": ("OpenStreetMap", "ODbL-1.0", "© OpenStreetMap contributors", True),
@@ -17,6 +18,47 @@ SOURCES = {
     "mapillary_arrows": ("Mapillary-derived observations", "Mapillary derivative-data terms: review required", "Mapillary contributors", False),
     "mapillary_signs": ("Mapillary-derived observations", "Mapillary derivative-data terms: review required", "Mapillary contributors", False),
 }
+
+OSNI_SOURCES = {
+    'streets': ('OSNI street-name gazetteer', 'osni-open-data-gazetteer-streetnames'),
+    'places': ('OSNI place-name gazetteer', 'osni-open-data-gazetteer-place-names'),
+}
+
+
+def osni_inventory(directory):
+    """Observed optional inputs; existence does not mean search accepted their rows."""
+    directory = Path(directory)
+    if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+        raise ValueError('Unsafe OSNI source directory')
+    rows = []
+    for stem, (label, dataset) in OSNI_SOURCES.items():
+        found = [directory / (stem + suffix) for suffix in ('.csv', '.geojson')
+                 if (directory / (stem + suffix)).exists() or (directory / (stem + suffix)).is_symlink()]
+        if len(found) > 1:
+            raise ValueError('Ambiguous OSNI source files: ' + stem)
+        path = found[0] if found else None
+        meta = fingerprint(path)
+        if path is not None and meta is None:
+            raise ValueError('Unsafe OSNI input: ' + stem)
+        url = None
+        reference = directory / (stem + '.source-url.txt')
+        if meta is not None and reference.exists():
+            if reference.is_symlink() or reference.stat().st_size > 8192:
+                raise ValueError('Unsafe OSNI download URL record')
+            parsed = urlsplit(reference.read_text(encoding='utf-8').strip())
+            if parsed.scheme not in ('http', 'https') or not parsed.netloc or parsed.username or parsed.password:
+                raise ValueError('Invalid OSNI download URL')
+            # Do not redistribute query credentials or expiring signed URL parameters.
+            url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, '', ''))
+        rows.append({'id': stem, 'label': label,
+                     'origin_url': 'https://admin.opendatani.gov.uk/dataset/' + dataset,
+                     'download_url': url, 'declared_licence': 'OGL-v3',
+                     'attribution': 'Contains LPS Intellectual Property © Crown copyright and database right; Open Government Licence',
+                     'present': meta is not None, 'file': path.name if path else None,
+                     'bytes': meta['bytes'] if meta else None,
+                     'sha256': meta['sha256'] if meta else None,
+                     'rights_review': 'not_independently_verified'})
+    return rows
 
 # URLs are those selected by the pinned Planetiler 0.10.1 executable/profile.
 PLANETILER_SOURCES = {
@@ -64,7 +106,7 @@ def fingerprint(filename):
     return {"bytes": path.stat().st_size, "sha256": sha.hexdigest()}
 
 
-def build(osm, osm_url, others, planetiler_sources=None):
+def build(osm, osm_url, others, planetiler_sources=None, osni_sources=None):
     if not isinstance(osm_url, str) or not osm_url.startswith("https://download.geofabrik.de/") or not osm_url.endswith(".osm.pbf"):
         raise ValueError("Unrecognised OSM source URL")
     if set(others) != (set(SOURCES) - {"osm_uk"}):
@@ -91,6 +133,8 @@ def build(osm, osm_url, others, planetiler_sources=None):
                 "Presence does not prove that the source was actually incorporated or covers all UK regions."]}
     if planetiler_sources is not None:
         document['planetiler_ancillary'] = planetiler_inventory(planetiler_sources)
+    if osni_sources is not None:
+        document['osni_gazetteers'] = osni_inventory(osni_sources)
     return document
 
 
@@ -166,6 +210,37 @@ def validate(doc):
                     raise ValueError('Invalid Planetiler source fingerprint')
             elif row.get('bytes') is not None or row.get('sha256') is not None:
                 raise ValueError('Absent Planetiler source has fingerprint')
+    if 'osni_gazetteers' in doc:
+        rows = doc['osni_gazetteers']
+        if not isinstance(rows, list) or len(rows) != len(OSNI_SOURCES):
+            raise ValueError('Incomplete OSNI gazetteer inventory')
+        seen = set()
+        for row in rows:
+            if not isinstance(row, dict) or row.get('id') not in OSNI_SOURCES or row['id'] in seen:
+                raise ValueError('Duplicate or unknown OSNI source')
+            stem = row['id']
+            seen.add(stem)
+            label, dataset = OSNI_SOURCES[stem]
+            if (row.get('label') != label or row.get('declared_licence') != 'OGL-v3' or
+                    row.get('rights_review') != 'not_independently_verified' or
+                    row.get('attribution') != 'Contains LPS Intellectual Property © Crown copyright and database right; Open Government Licence' or
+                    row.get('origin_url') != 'https://admin.opendatani.gov.uk/dataset/' + dataset or
+                    type(row.get('present')) is not bool):
+                raise ValueError('OSNI source declarations changed')
+            if row['present']:
+                if (row.get('file') not in (stem + '.csv', stem + '.geojson') or
+                        type(row.get('bytes')) is not int or row['bytes'] <= 0 or
+                        not isinstance(row.get('sha256'), str) or not re.fullmatch('[0-9a-f]{64}', row['sha256'])):
+                    raise ValueError('Invalid OSNI source fingerprint')
+            elif any(row.get(key) is not None for key in ('file', 'bytes', 'sha256', 'download_url')):
+                raise ValueError('Absent OSNI source has metadata')
+            if row.get('download_url') is not None:
+                if not isinstance(row['download_url'], str):
+                    raise ValueError('Invalid OSNI download URL')
+                parsed = urlsplit(row['download_url'])
+                if (parsed.scheme not in ('http', 'https') or not parsed.netloc or
+                        parsed.username or parsed.password or parsed.query or parsed.fragment):
+                    raise ValueError('Invalid or credential-bearing OSNI download URL')
     return doc
 
 
@@ -178,7 +253,7 @@ def read(path):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    for flag in ("osm", "osm-url", "overture", "os-names", "mapillary-arrows", "mapillary-signs", "planetiler-sources", "out", "validate"):
+    for flag in ("osm", "osm-url", "overture", "os-names", "mapillary-arrows", "mapillary-signs", "planetiler-sources", "osni-sources", "out", "validate"):
         p.add_argument("--" + flag)
     a = p.parse_args()
     if a.validate:
@@ -193,7 +268,7 @@ def main():
             "mapillary_arrows": a.mapillary_arrows,
             "mapillary_signs": a.mapillary_signs,
         }
-        doc = validate(build(a.osm, a.osm_url, sources, a.planetiler_sources))
+        doc = validate(build(a.osm, a.osm_url, sources, a.planetiler_sources, a.osni_sources))
         path = Path(a.out)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(doc, sort_keys=True, indent=2) + "\n", encoding="utf-8")

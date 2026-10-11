@@ -78,6 +78,12 @@ try:
     for item in source_inventory["sources"]:
         if not item["present"]:
             warnings.append(f"Optional source not available: {item['id']}")
+    if 'osni_gazetteers' not in source_inventory:
+        warnings.append("OSNI optional source inventory not recorded; NI search coverage is unverified.")
+    else:
+        for item in source_inventory['osni_gazetteers']:
+            if not item['present']:
+                warnings.append(f"OSNI optional source not available: {item['id']}; NI search gap remains.")
     warnings.append("Licence declarations require separate legal review; file fingerprints alone do not prove reuse rights.")
 except (ValueError, OSError, UnicodeError, json.JSONDecodeError) as exc:
     errors.append(f"Source inventory invalid or missing: {exc}")

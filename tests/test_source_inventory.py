@@ -91,6 +91,71 @@ class InventoryTests(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 source.validate(result)
 
+    def osni_document(self):
+        return source.build(self.osm, URL, self.optional, osni_sources=self.dir)
+
+    def test_absent_osni_sources_explicit_without_changing_legacy_inventory(self):
+        result = source.validate(self.osni_document())
+        self.assertEqual(len(result['sources']), 5)
+        self.assertEqual(len(result['osni_gazetteers']), 2)
+        self.assertTrue(all(not row['present'] for row in result['osni_gazetteers']))
+        self.assertNotIn('osni_gazetteers', source.build(self.osm, URL, self.optional))
+
+    def test_osni_csv_and_geojson_fingerprints_recorded(self):
+        (self.dir / 'streets.csv').write_text('name,lat,lon\nTest street,54.6,-5.9\n')
+        (self.dir / 'places.geojson').write_text('{"type":"FeatureCollection","features":[]}')
+        result = source.validate(self.osni_document())
+        rows = result['osni_gazetteers']
+        self.assertTrue(all(row['present'] for row in rows))
+        self.assertEqual(rows[0]['file'], 'streets.csv')
+        self.assertEqual(rows[1]['file'], 'places.geojson')
+        self.assertNotEqual(rows[0]['sha256'], rows[1]['sha256'])
+
+    def test_osni_url_query_and_fragment_removed(self):
+        (self.dir / 'streets.csv').write_text('synthetic input')
+        (self.dir / 'streets.source-url.txt').write_text('https://example.org/public.csv?sig=temporary#part')
+        row = source.validate(self.osni_document())['osni_gazetteers'][0]
+        self.assertEqual(row['download_url'], 'https://example.org/public.csv')
+
+    def test_osni_ambiguous_files_and_symlinks_rejected(self):
+        (self.dir / 'streets.csv').write_text('synthetic input')
+        (self.dir / 'streets.geojson').write_text('synthetic input')
+        with self.assertRaises(ValueError):
+            self.osni_document()
+        (self.dir / 'streets.geojson').unlink()
+        (self.dir / 'streets.csv').unlink()
+        (self.dir / 'streets.csv').symlink_to(self.osm)
+        with self.assertRaises(ValueError):
+            self.osni_document()
+        (self.dir / 'streets.csv').unlink()
+        (self.dir / 'streets.csv').symlink_to(self.dir / 'missing.csv')
+        with self.assertRaises(ValueError):
+            self.osni_document()
+
+    def test_osni_credential_bearing_and_unsafe_url_records_rejected(self):
+        (self.dir / 'streets.csv').write_text('synthetic input')
+        reference = self.dir / 'streets.source-url.txt'
+        reference.write_text('https://user:pass@example.org/data.csv')
+        with self.assertRaises(ValueError):
+            self.osni_document()
+        reference.unlink()
+        reference.symlink_to(self.osm)
+        with self.assertRaises(ValueError):
+            self.osni_document()
+
+    def test_osni_inventory_tampering_rejected(self):
+        (self.dir / 'streets.csv').write_text('synthetic input')
+        for mutation in ('duplicate', 'hash', 'licence', 'absent', 'url'):
+            result = self.osni_document()
+            rows = result['osni_gazetteers']
+            if mutation == 'duplicate': rows[1] = rows[0].copy()
+            elif mutation == 'hash': rows[0]['sha256'] = 'bad'
+            elif mutation == 'licence': rows[0]['declared_licence'] = 'Unrestricted'
+            elif mutation == 'absent': rows[1]['bytes'] = 7
+            else: rows[0]['download_url'] = 'https://example.org/data.csv?token=temporary'
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                source.validate(result)
+
 
 if __name__ == "__main__":
     unittest.main()

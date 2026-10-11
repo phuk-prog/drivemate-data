@@ -336,6 +336,7 @@ jobs:
             case "$url" in *.geojson|*.json|*geojson*) ext=geojson ;; *) ext=csv ;; esac
             if curl -sSfL --retry 2 --max-time 600 -o "work/osni/$stem.$ext" "$url" \
                && [ -s "work/osni/$stem.$ext" ] && [ "$(head -c 1 "work/osni/$stem.$ext")" != "<" ]; then
+              printf '%s\n' "$url" > "work/osni/$stem.source-url.txt"
               echo "work/osni/$stem.$ext"
             else
               echo "::warning::OSNI $stem download failed ($url)" >&2; rm -f "work/osni/$stem.$ext"; return 1
@@ -391,6 +392,7 @@ jobs:
             --mapillary-arrows out/mapillary-arrows-cache.json.gz \
             --mapillary-signs out/mapillary-signs-cache.json.gz \
             --planetiler-sources work/sources \
+            --osni-sources work/osni \
             --out out/source-inventory.json
           python3 scripts/source_inventory.py --validate out/source-inventory.json
 
