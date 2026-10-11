@@ -111,6 +111,41 @@ class RoutingPublicationTest(unittest.TestCase):
             self.publish()
         self.assertEqual(self.github.actions, [])
 
+    def test_invalid_timestamp_provenance_blocks_remote_writes(self):
+        for built in ('not-a-date', '2026-10-09', '2026-10-09T00:00:00', '2026-10-08T00:00:00Z'):
+            self.document['built'] = built
+            with self.assertRaises(ValueError):
+                self.publish()
+        self.assertEqual(self.github.actions, [])
+
+    def test_missing_retrieval_timezone_and_bad_source_url_are_rejected(self):
+        for value in ('2026-10-09T00:00:00', ''):
+            self.document['source']['retrieved_at'] = value
+            with self.assertRaises(ValueError):
+                self.publish()
+        self.document['source']['retrieved_at'] = '2026-10-09T00:00:00Z'
+        self.document['source']['url'] += '.html'
+        with self.assertRaises(ValueError):
+            self.publish()
+        self.assertEqual(self.github.actions, [])
+
+    def test_mixed_missing_or_reordered_graph_parts_are_rejected(self):
+        bad = [[self.name.replace('part00', 'part01')],
+               [self.name, self.name.replace('test', 'other').replace('part00', 'part01')],
+               [self.name.replace('part00', 'part01'), self.name]]
+        for parts in bad:
+            self.document['parts'] = parts
+            with self.assertRaises(ValueError):
+                self.publish()
+        self.assertEqual(self.github.actions, [])
+
+    def test_invalid_compressed_sizes_are_rejected(self):
+        for value in (True, '123', 0, -1, routing.MAX_GRAPH + 1):
+            self.document['download_bytes'] = value
+            with self.assertRaises(ValueError):
+                self.publish()
+        self.assertEqual(self.github.actions, [])
+
 
 if __name__ == '__main__':
     unittest.main()

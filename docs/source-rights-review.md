@@ -1,5 +1,13 @@
 # Source rights review — 10 October 2026
 
+Current decision reminder (11 October): the owner-approved decisions are in
+`docs/licensing-decision-brief.md`. OSM/OS Open Names/OSNI attribution and
+Overture notice requirements were accepted and implemented; Mapillary was
+removed because its terms prohibit the proposed real-time navigation use.
+Do not interpret the historical research below as permission to re-enable
+Mapillary by adding a token. NI postcode redistribution still awaits written
+LPS permission; permitted street/place gazetteers are a separate source.
+
 This is an engineering inventory of primary-source terms, not a blanket grant of
 rights or a claim that every existing published feature is cleared. No new live
 map publication is authorised by a passing fingerprint check.

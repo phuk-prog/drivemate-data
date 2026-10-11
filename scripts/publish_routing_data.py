@@ -4,6 +4,7 @@ Byte integrity is not proof of geographical completeness or legal correctness.
 GitHub pointer replacement is recoverable, not atomic. Old chunks are retained.
 """
 import argparse
+from datetime import datetime
 import json
 from pathlib import Path
 import re
@@ -62,8 +63,10 @@ def validate_manifest(document):
         raise ValueError('Invalid graph fingerprint')
     if type(document.get('bytes')) is not int or not 0 < document['bytes'] <= MAX_GRAPH:
         raise ValueError('Invalid graph size')
+    if type(document.get('download_bytes')) is not int or not 0 < document['download_bytes'] <= MAX_GRAPH:
+        raise ValueError('Invalid compressed graph size')
     parts = document.get('parts')
-    if not isinstance(parts, list) or not 1 <= len(parts) <= 128:
+    if not isinstance(parts, list) or not 1 <= len(parts) <= 100:
         raise ValueError('Invalid graph parts')
     for name in parts:
         checked_name(name)
@@ -71,6 +74,23 @@ def validate_manifest(document):
             raise ValueError('Invalid graph part name')
     if len(set(parts)) != len(parts):
         raise ValueError('Duplicate graph part')
+    prefix = parts[0].rsplit('.part', 1)[0]
+    if parts != [prefix + f'.part{number:02d}' for number in range(len(parts))]:
+        raise ValueError('Graph chunks must be contiguous and from one archive')
+    source = document.get('source')
+    if (not isinstance(source, dict) or source.get('licence') != 'ODbL-1.0' or
+            not isinstance(source.get('sha256'), str) or not SHA.fullmatch(source['sha256']) or
+            not isinstance(source.get('url'), str) or
+            not source['url'].startswith('https://download.geofabrik.de/') or
+            not source['url'].endswith('.osm.pbf')):
+        raise ValueError('Missing licensed source provenance')
+    try:
+        retrieved = datetime.fromisoformat(source['retrieved_at'])
+        built = datetime.fromisoformat(document['built'])
+        if retrieved.tzinfo is None or built.tzinfo is None or built < retrieved:
+            raise ValueError('Source/build timestamps require timezone and chronological order')
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError('Invalid source/build timestamps') from exc
 
 
 def publish(github, out, tag):
@@ -85,12 +105,6 @@ def publish(github, out, tag):
         raise ValueError('Unsafe manifest')
     document = json.loads(manifest.read_text())
     validate_manifest(document)
-    source = document.get('source', {})
-    if (source.get('licence') != 'ODbL-1.0' or
-            not SHA.fullmatch(source.get('sha256', '')) or
-            not source.get('url', '').startswith('https://download.geofabrik.de/') or
-            not source.get('retrieved_at') or not document.get('built')):
-        raise ValueError('Missing licensed source provenance')
     files = {}
     with tempfile.TemporaryDirectory(prefix='drivemate-routing-') as temporary:
         joined = Path(temporary) / 'joined.gz'

@@ -19,8 +19,11 @@ passed at the existing HEAD; it predates this stronger search gate.
 
 This verifies data structure and ordering, not exact property addresses,
 NI postcode completeness, human road safety or independent licence clearance.
-OSNI optional feeds, Mapillary permissions and unavailable live integrations
-remain conditional/inactive rather than blocking independent integrity work.
+OSNI optional feeds and unavailable live integrations remain conditional/inactive
+rather than blocking independent integrity work. Mapillary was removed under
+the owner-approved decision in `docs/licensing-decision-brief.md`; it must not
+be reactivated merely by supplying credentials. Older rights-review entries
+below describe historical findings, not a pending permission to enable Mapillary.
 No stage is newly marked completed; remaining legal/data/device gates are preserved.
 
 Local canonical preflight: 308 unit tests, zero failures/errors/skips; all five
@@ -61,6 +64,20 @@ prove nationwide legal routing, demonstrate Android runtime acceptance of a new
 generation, or test remote recovery after process/power loss. Required device,
 replay and human road-evidence gates remain outstanding. Previously published
 archives remain untouched; no stage is marked completed from this source work.
+
+### Routing manifest coherence
+
+The publisher now rejects mixed archive prefixes, missing/reordered chunks,
+noninteger or unbounded compressed sizes, unsupported source URLs, unparseable
+or timezone-free timestamps and a build timestamp earlier than source retrieval.
+These errors are rejected before remote writes. Four new regressions pass;
+the previous recorded graph manifest and the latest immutable manifest
+`routing-uk-20261011-r38120645154-a1` both pass. The latest manifest claims
+decoded SHA-256 `4361e92b14d752616dc59a47ad4e9bd1ff87e9b45cc37978e619a20f9cd7a2da`
+and 2,800,936,960 bytes; **its binary was not downloaded or tested in this
+manifest-only check**. Actual full-container evidence above remains tied to
+the explicitly older generation. Android's existing ordered-part format and
+engine identity are preserved.
 
 Updated 2026-10-10. Budget: £20 one-off maximum; no spending or paid services enabled.
 Development stays on `codex/architecture-foundation`, existing draft PR #3 in each repository.
