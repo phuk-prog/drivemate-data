@@ -1,0 +1,58 @@
+{
+  "records": 191287,
+  "manifest": {
+    "counts": {
+      "invalid_features": 0,
+      "missing_fields": 2332,
+      "records": 191287,
+      "seen": 193619
+    },
+    "entrance_verified": false,
+    "format": "drivemate-osm-addresses",
+    "full_postal_address_verified": false,
+    "limitations": [
+      "OSM mapped addresses are incomplete and not authoritative postal verification.",
+      "Outline-average coordinates are approximate building locations, not verified vehicle entrances.",
+      "Entrance tags are observations; access and routable connections remain unverified.",
+      "No UPRN, restricted NI postcode source, proprietary address data or inferred street was used.",
+      "Relations and address interpolation are not expanded; mapped number expressions remain unexpanded."
+    ],
+    "notice": "\u00a9 OpenStreetMap contributors. Database under ODbL 1.0: https://opendatacommons.org/licenses/odbl/1-0/",
+    "query_engine": "SQLite B-tree and FTS4 unicode61; no FTS5",
+    "schema": 1,
+    "source": {
+      "bytes": 51516055,
+      "declared_extract_bbox": "(-2.7320970/53.3261300 -1.9080400/53.6874200)",
+      "export_counts": {
+        "nodes": 79047,
+        "unsupported_or_incomplete_geometry": 0,
+        "ways": 114572
+      },
+      "licence": "ODbL-1.0",
+      "sha256": "937cc05bd4eb6773ba48f381489ebf3a923cdff5b0302f64f5bde3e271a8e814",
+      "snapshot_utc": "2026-10-08T20:21:06Z",
+      "url": "https://download.geofabrik.de/europe/united-kingdom/england/greater-manchester-261008.osm.pbf"
+    },
+    "status": "experimental_unpublished"
+  },
+  "package": {
+    "bytes": 140386304,
+    "sha256": "30134b321db5ae44b2f84f4fb0e4850748ccff894a09000f000630497241a45c"
+  },
+  "validation_seconds": 28.621,
+  "coverage": {
+    "mapped_nodes": 78829,
+    "approximate_building_locations": 112458,
+    "records_with_postcode": 144920,
+    "records_without_postcode": 46367,
+    "tagged_entrances_unverified": 1958
+  },
+  "search_smoke": {
+    "queries": 54,
+    "nonempty_results": 54,
+    "max_elapsed_ms": 36.08,
+    "scope": "20 evenly sampled public mapped properties; does not prove ranking, positional or postal accuracy"
+  },
+  "compressed_bytes": 18050501,
+  "android_device_compatibility": "NOT_EXECUTED: FTS4 sqlite syntax is supported by Android platform, but importer/device proof is pending"
+}

@@ -1,5 +1,26 @@
 # DriveMate development register
 
+## Regional address milestone — 12 October 2026
+
+| Task | Status | Acceptance and evidence |
+|---|---|---|
+| Add optional regional OSM address index without changing legacy places | Implemented, locally verified | SQLite B-tree/FTS4, stable OSM IDs, full mapped coordinates and source fingerprint; eleven regression tests cover indexed street/postcode/property queries, incomplete fields, approximate geometry, tampering and atomic failure recovery. `docs/regional-address-index.md` |
+| Verify actual regional address data | Verified for bounded Manchester experiment | Public 2026-10-08 extract: 193,619 candidates, 191,287 usable records, 2,332 missing-field gaps, zero invalid retained geometries. Complete SQLite/record/index validation; 54/54 search smoke queries nonempty. `docs/validation/regional-addresses-manchester-20261012.json` |
+| Integrate regional address package into Android and publication | Pending | Android importer/FTS4 device tests, versioned package compatibility, explicit approved publication checks and attribution remain required. Package stays unpublished; no full postal verification or vehicle entrance claim |
+
+The real extract has 46,367 records without postcodes and 112,458 approximate
+outline-average coordinates. Source/row verification is not nationwide postal,
+entrance or legal driving proof. FTS4 avoids unsupported FTS5 assumptions; actual
+Android package consumption remains untested. All previous working publications
+remain unchanged.
+
+Environment recovery: the first broad preflight found missing host `pyproj`,
+`pmtiles` and `shapely` dependencies. Install the exact dependency versions already
+pinned in `.github/workflows/source-checks.yml`, then repeat canonical preflight;
+never classify missing generator imports as passing checks. Repeated canonical
+preflight passes all 339 unit tests (zero failures/errors/skips) and all five
+generator selftests at base `eb730932fc5e35c774c4b7ef433bf2b586da8e0b`.
+
 ## Current continuation — 11 October 2026
 
 Live foundation HEAD was `a446223222fc31847c778b5c48355a09966f7999` when inspected.

@@ -31,6 +31,7 @@ import re
 import struct
 
 import places_provenance
+from address_geometry import clean, mapped_coordinate
 
 ap = argparse.ArgumentParser()
 ap.add_argument("out")
@@ -139,10 +140,6 @@ if args.osm and os.path.exists(args.osm):
             add("osm", name, kind, addr, lat, lon)
 
 # ---------- OpenStreetMap house numbers (addr:housenumber + addr:street) ----------
-def clean(v):
-    return " ".join(v.split()) if isinstance(v, str) else ""
-
-
 if args.osm_addresses and os.path.exists(args.osm_addresses):
     with open(args.osm_addresses, encoding="utf-8") as f:
         for line in f:
@@ -157,12 +154,7 @@ if args.osm_addresses and os.path.exists(args.osm_addresses):
             g = feat.get("geometry") or {}
             coords = g.get("coordinates")
             try:
-                if g.get("type") == "Point":
-                    lon, lat = coords
-                else:
-                    ring = coords[0][0] if g.get("type") == "MultiPolygon" else coords[0]
-                    lon = sum(c[0] for c in ring) / len(ring)
-                    lat = sum(c[1] for c in ring) / len(ring)
+                lon, lat, _ = mapped_coordinate(g)
             except (TypeError, ValueError, IndexError, ZeroDivisionError):
                 continue
             place = next((clean(p.get(k)) for k in ("addr:city", "addr:town", "addr:village", "addr:suburb", "addr:hamlet")
