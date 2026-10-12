@@ -58,6 +58,11 @@ def record(feature):
             'address_fields': retained}
 
 
+def word_text(item):
+    return key(' '.join((item['display'], item['house_name'], item['unit'],
+                         item['locality'], item['postcode'])))
+
+
 def build(features, destination, source):
     """Validate complete input and SQLite before same-directory atomic replacement."""
     if (not isinstance(source, dict) or source.get('licence') != 'ODbL-1.0' or
@@ -96,7 +101,7 @@ def build(features, destination, source):
                             json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(',', ':'))))
                 db.execute('INSERT INTO address_words(rowid,search_text) VALUES (?,?)',
                            (db.execute('SELECT last_insert_rowid()').fetchone()[0],
-                            key(' '.join((item['display'], item['locality'], item['postcode'])))))
+                            word_text(item)))
                 counts['records'] += 1
             if not counts['records']:
                 raise ValueError('No usable regional addresses')
@@ -158,7 +163,7 @@ def validate(path):
         for payload, indexed_text in db.execute('SELECT a.record_json,f.search_text FROM addresses a '
                                                'JOIN address_words f ON a.rowid=f.rowid'):
             item = json.loads(payload)
-            if indexed_text != key(' '.join((item['display'], item['locality'], item['postcode']))):
+            if indexed_text != word_text(item):
                 raise ValueError('Address word index mismatch')
         words = db.execute('SELECT COUNT(*) FROM address_words').fetchone()[0]
         if words != count or db.execute('SELECT COUNT(*) FROM addresses a LEFT JOIN address_words f '
@@ -183,12 +188,15 @@ def search(path, query, limit=12):
         if re.fullmatch(r'(GIR0AA|[A-Z]{1,2}[0-9][A-Z0-9]?[0-9][A-Z]{2})', code):
             rows = db.execute('SELECT record_json FROM addresses WHERE postcode_key=? '
                               'ORDER BY search_key,osm_type,osm_id LIMIT ?', (code, limit))
+        elif q.isdigit():
+            rows = []
         else:
             rows = db.execute('SELECT record_json FROM addresses WHERE search_key>=? AND search_key<? '
                               'ORDER BY search_key,osm_type,osm_id LIMIT ?', (q, q + '\uffff', limit))
         results = [json.loads(row[0]) for row in rows]
         if not results and not re.fullmatch(r'(GIR0AA|[A-Z]{1,2}[0-9][A-Z0-9]?[0-9][A-Z]{2})', code):
-            expression = ' AND '.join(token + '*' for token in q.split())
+            # Numeric house/unit terms are exact; prefixing 12 would also match 123.
+            expression = ' AND '.join(token if token.isdigit() else token + '*' for token in q.split())
             rows = db.execute('SELECT a.record_json FROM addresses a JOIN address_words f ON a.rowid=f.rowid '
                               'WHERE address_words MATCH ? ORDER BY a.search_key,a.osm_type,a.osm_id LIMIT ?',
                               (expression, limit))

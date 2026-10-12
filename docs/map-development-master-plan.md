@@ -1,5 +1,16 @@
 # DriveMate development register
 
+## Regional address follow-up — 12 October 2026
+
+Exact source CI [38215042634](https://github.com/phuk-prog/drivemate-data/actions/runs/38215042634)
+passed at `4b2c979089c4731212cf2d8b0a23a100c981918a` with 339 unit tests and
+five generator selftests. A source-side follow-up preserves mapped house names
+when a house also has a number and uses exact numeric FTS tokens; a reordered
+query for house 12 must not prefix-match house 123. Two regression tests cover
+these cases; the follow-up canonical target is 341 unit tests and five generator
+selftests, with unchanged-source/live-HEAD checks before upload. The unpublished Manchester experiment is regenerated and inspected
+with the final exporter; no working published generation is replaced.
+
 ## Regional address milestone — 12 October 2026
 
 | Task | Status | Acceptance and evidence |

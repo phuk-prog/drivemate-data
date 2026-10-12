@@ -1,15 +1,28 @@
 {
   "records": 191287,
   "manifest": {
-    "counts": {
-      "invalid_features": 0,
-      "missing_fields": 2332,
-      "records": 191287,
-      "seen": 193619
-    },
-    "entrance_verified": false,
+    "schema": 1,
     "format": "drivemate-osm-addresses",
-    "full_postal_address_verified": false,
+    "source": {
+      "bytes": 51516055,
+      "sha256": "937cc05bd4eb6773ba48f381489ebf3a923cdff5b0302f64f5bde3e271a8e814",
+      "url": "https://download.geofabrik.de/europe/united-kingdom/england/greater-manchester-261008.osm.pbf",
+      "licence": "ODbL-1.0",
+      "snapshot_utc": "2026-10-08T20:21:06Z",
+      "declared_extract_bbox": "(-2.7320970/53.3261300 -1.9080400/53.6874200)",
+      "export_counts": {
+        "nodes": 79047,
+        "ways": 114572,
+        "unsupported_or_incomplete_geometry": 0
+      }
+    },
+    "counts": {
+      "seen": 193619,
+      "records": 191287,
+      "missing_fields": 2332,
+      "invalid_features": 0
+    },
+    "notice": "\u00a9 OpenStreetMap contributors. Database under ODbL 1.0: https://opendatacommons.org/licenses/odbl/1-0/",
     "limitations": [
       "OSM mapped addresses are incomplete and not authoritative postal verification.",
       "Outline-average coordinates are approximate building locations, not verified vehicle entrances.",
@@ -17,29 +30,15 @@
       "No UPRN, restricted NI postcode source, proprietary address data or inferred street was used.",
       "Relations and address interpolation are not expanded; mapped number expressions remain unexpanded."
     ],
-    "notice": "\u00a9 OpenStreetMap contributors. Database under ODbL 1.0: https://opendatacommons.org/licenses/odbl/1-0/",
-    "query_engine": "SQLite B-tree and FTS4 unicode61; no FTS5",
-    "schema": 1,
-    "source": {
-      "bytes": 51516055,
-      "declared_extract_bbox": "(-2.7320970/53.3261300 -1.9080400/53.6874200)",
-      "export_counts": {
-        "nodes": 79047,
-        "unsupported_or_incomplete_geometry": 0,
-        "ways": 114572
-      },
-      "licence": "ODbL-1.0",
-      "sha256": "937cc05bd4eb6773ba48f381489ebf3a923cdff5b0302f64f5bde3e271a8e814",
-      "snapshot_utc": "2026-10-08T20:21:06Z",
-      "url": "https://download.geofabrik.de/europe/united-kingdom/england/greater-manchester-261008.osm.pbf"
-    },
-    "status": "experimental_unpublished"
+    "status": "experimental_unpublished",
+    "full_postal_address_verified": false,
+    "entrance_verified": false,
+    "query_engine": "SQLite B-tree and FTS4 unicode61; no FTS5"
   },
   "package": {
-    "bytes": 140386304,
-    "sha256": "30134b321db5ae44b2f84f4fb0e4850748ccff894a09000f000630497241a45c"
+    "bytes": 140546048,
+    "sha256": "22880f72e15d07ed9e18100b3ceb8b5093500da84b5ff3ba321082c166174eb9"
   },
-  "validation_seconds": 28.621,
   "coverage": {
     "mapped_nodes": 78829,
     "approximate_building_locations": 112458,
@@ -50,9 +49,10 @@
   "search_smoke": {
     "queries": 54,
     "nonempty_results": 54,
-    "max_elapsed_ms": 36.08,
+    "max_elapsed_ms": 3.884,
     "scope": "20 evenly sampled public mapped properties; does not prove ranking, positional or postal accuracy"
   },
-  "compressed_bytes": 18050501,
-  "android_device_compatibility": "NOT_EXECUTED: FTS4 sqlite syntax is supported by Android platform, but importer/device proof is pending"
+  "compressed_bytes": 18121939,
+  "android_device_compatibility": "NOT_EXECUTED: FTS4 sqlite syntax is supported by Android platform, but importer/device proof is pending",
+  "complete_validation": "Passed inside atomic builder before replacement, including every record and FTS row"
 }

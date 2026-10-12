@@ -112,3 +112,12 @@ class RegionalAddressTests(unittest.TestCase):
             db.execute("UPDATE address_words SET search_text='invented location'")
         with self.assertRaises(ValueError):
             validate(self.path)
+
+    def test_numbered_and_named_property_is_searchable_by_name(self):
+        self.generate([feature(**{'addr:housename': 'Rose Cottage'})])
+        self.assertEqual('12', search(self.path, 'Rose Cottage')[0]['house_number'])
+
+    def test_reordered_numeric_house_query_does_not_prefix_match_other_house(self):
+        self.generate([feature(), feature('123', 'node/2')])
+        self.assertEqual(['12'], [r['house_number'] for r in search(self.path, 'Example Road 12')])
+        self.assertEqual(['12'], [r['house_number'] for r in search(self.path, '12')])

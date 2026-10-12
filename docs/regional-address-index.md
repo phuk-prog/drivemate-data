@@ -14,7 +14,9 @@ not invented as individual postal addresses.
 
 Search supports indexed property-prefix, exact postcode and FTS4 street/name token
 queries. FTS5 is not used. Input operators are normalised into plain alphanumeric
-terms; result counts and query lengths are bounded. The SQLite file is inspected
+terms; numeric house/unit tokens match exactly so 12 does not also recommend 123.
+Properties with both a number and a house name can be found by either. Result
+counts and query lengths are bounded. The SQLite file is inspected
 with `integrity_check`, every record and the word index before same-directory atomic
 replacement. Failed/duplicate/empty builds retain the previous file.
 
