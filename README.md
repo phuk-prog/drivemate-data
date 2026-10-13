@@ -20,6 +20,9 @@ after all its assets have uploaded and their SHA-256 hashes and sizes match.
 | `cameras-uk.json` | Speed / red-light / average-speed cameras and level crossings |
 | `charge-zones-uk.json` | Charge and emission zones with what each means for a car: London Congestion Charge and London-wide ULEZ (official TfL boundaries), Birmingham Clean Air Zone (inside the A4540 Middleway, traced from OpenStreetMap because the council's own file is not openly licensed), and the other Clean Air Zones / Scottish LEZs mapped in OpenStreetMap |
 
+**Optional road-shape tags in lane squares.** Each way's `t` may also carry, straight from OpenStreetMap (ODbL), `layer`, `bridge`, `tunnel`, `level`, `width`, `est_width` and `kerb` (only when OSM has them; `junction=roundabout` was already kept). Roads on a bridge, in a tunnel or at another level are included even without lane tags and are marked `"ctx":1` (context only, no lane data). Old readers ignore all of this.
+
+
 Also, in the separate `routing-uk` release: `routing-uk.json` and `valhalla-uk-<date>.tar.gz.partNN`, the
 whole-UK road graph (Valhalla 3.6.3) for routes worked out on the phone with no signal. The phone
 downloads it on Wi-Fi only when you switch it on in Settings; `routing-uk.json` switches to a new

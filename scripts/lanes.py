@@ -17,7 +17,26 @@ KEEP = [
     # Bus lanes, so the app can mark them and never advise them.
     "bus:lanes", "bus:lanes:forward", "bus:lanes:backward",
     "psv:lanes", "psv:lanes:forward", "psv:lanes:backward",
+    # Road level and shape (OSM only), so the app can draw bridges/tunnels in level order and
+    # road edges. All optional: a way only carries the ones OSM has. `junction` (above) already
+    # marks roundabouts.
+    "layer", "bridge", "tunnel", "level", "width", "est_width", "kerb",
 ]
+# A road that is not at ground level is kept even without lane tags (flag "ctx": 1), so the app
+# knows what crosses a junction without joining it.
+LEVEL_KEYS = ("layer", "bridge", "tunnel", "level")
+
+
+def off_ground(props):
+    """True when OSM says this road is on a bridge/tunnel or at another level."""
+    for k in ("bridge", "tunnel"):
+        if str(props.get(k, "no")).lower() not in ("no", "false", "0", ""):
+            return True
+    for k in ("layer", "level"):
+        v = str(props.get(k, "0")).strip()
+        if v not in ("", "0", "0;0"):
+            return True
+    return False
 
 src, dst = sys.argv[1], sys.argv[2]
 ways = []
@@ -32,17 +51,24 @@ with open(src, encoding="utf-8") as f:
         stats["roads"] += 1
         has_lanes = any(k in props for k in ("lanes", "lanes:forward", "lanes:backward"))
         has_turn = any(k.startswith("turn:lanes") for k in props)
-        if not (has_lanes or has_turn):
+        ctx_only = not (has_lanes or has_turn)
+        if ctx_only and not off_ground(props):
             continue
-        stats["with_lanes"] += 1
-        if has_turn:
-            stats["with_turn_lanes"] += 1
+        if ctx_only:
+            stats["level_only"] = stats.get("level_only", 0) + 1
+        else:
+            stats["with_lanes"] += 1
+            if has_turn:
+                stats["with_turn_lanes"] += 1
         coords = feat["geometry"]["coordinates"]
-        ways.append({
+        way = {
             "id": props.get("@id") or props.get("id"),
             "t": {k: props[k] for k in KEEP if k in props},
             "g": [[round(c[0], 5), round(c[1], 5)] for c in coords],
-        })
+        }
+        if ctx_only:
+            way["ctx"] = 1
+        ways.append(way)
 
 SOURCE = "© OpenStreetMap contributors, ODbL 1.0 https://opendatacommons.org/licenses/odbl/1-0/"
 
