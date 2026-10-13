@@ -19,6 +19,8 @@ ASSET_LIMIT = 1000
 MAIN_FILES = 900
 MIN_MAP_BYTES = 50_000_000
 MAX_ASSET_BYTES = 1_950_000_000
+MAX_MANIFEST_ENTRIES = 5_000
+MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,150}')
 TAG = re.compile(r'map-data-[A-Za-z0-9][A-Za-z0-9._-]{0,100}')
 LICENSE_DIR = Path(__file__).resolve().parent.parent / 'licenses'
@@ -189,7 +191,68 @@ def _load(name):
 
 regional = _load('region_publication')
 places_provenance = _load('places_provenance')
+osm_snapshot = _load('osm_source_snapshot')
+osm_features = _load('osm_feature_packs')
+osm_relations = _load('osm_relation_packs')
+source_probe = _load('daily_source_probe')
 PLACE_TILE = re.compile(r'places--?\d+_-?\d+\.json\.gz')
+ROAD_DETAIL_TILE = re.compile(r'road-details--?\d+_-?\d+\.json\.gz')
+SNAPSHOT_PART = re.compile(r'osm-source\.part[0-9]{5}')
+FEATURE_PACK = re.compile(r'feature-packs-(?:-?\d+_-?\d+|global)\.jsonl\.gz')
+RELATION_PACK = re.compile(r'relation-packs-\d+\.jsonl\.gz')
+DETAIL_MANIFESTS = {'feature-packs-manifest.json', 'relation-packs-manifest.json'}
+
+
+def validate_osm_details(files):
+    for manifest_name, pattern, validator, count_key in (
+        ('feature-packs-manifest.json', FEATURE_PACK, osm_features.validate_directory, 'features'),
+        ('relation-packs-manifest.json', RELATION_PACK, osm_relations.validate_directory, 'relations'),
+    ):
+        selected = {name for name in files if name == manifest_name or pattern.fullmatch(name)}
+        if not selected:
+            continue
+        if manifest_name not in files:
+            raise ValueError('OSM detail packs require their complete manifest')
+        directory = files[manifest_name].parent
+        if any(files[name].parent != directory for name in selected):
+            raise ValueError('Each OSM detail dataset must be in one directory')
+        manifest = validator(directory)
+        if manifest[count_key] <= 0:
+            raise ValueError('Published UK OSM detail dataset is empty')
+    if 'source-checkpoint.json' in files:
+        if not {'osm-source-manifest.json', *DETAIL_MANIFESTS} <= files.keys():
+            raise ValueError('New source checkpoints require complete OSM source, feature and relation datasets')
+        if 'source-inventory.json' not in files:
+            raise ValueError('Source checkpoint requires the source inventory')
+        path = files['source-checkpoint.json']
+        if path.stat().st_size > 16_384:
+            raise ValueError('Source checkpoint is oversized')
+        checkpoint = source_probe.validate_checkpoint(json.loads(path.read_text()))
+        inventory = _load('source_inventory').read(files['source-inventory.json'])
+        source = next(item for item in inventory['sources'] if item['id'] == 'osm_uk')
+        if (checkpoint.get('source_sha256') != source['sha256']
+                or type(checkpoint.get('source_bytes')) is not int
+                or checkpoint['source_bytes'] != source['bytes']
+                or checkpoint['source_url'] != source['origin_url']):
+            raise ValueError('Source checkpoint differs from the map input inventory')
+
+
+def validate_source_snapshot(files):
+    names = {name for name in files if name == 'osm-source-manifest.json' or SNAPSHOT_PART.fullmatch(name)}
+    if not names:
+        return
+    if 'osm-source-manifest.json' not in names or 'source-inventory.json' not in files:
+        raise ValueError('Source snapshot requires its manifest and source inventory')
+    directory = files['osm-source-manifest.json'].parent
+    if any(files[name].parent != directory for name in names):
+        raise ValueError('Source snapshot must be in one directory')
+    snapshot = osm_snapshot.verify(directory)
+    inventory = _load('source_inventory').read(files['source-inventory.json'])
+    source = next(item for item in inventory['sources'] if item['id'] == 'osm_uk')
+    if (not source['present'] or snapshot['source_bytes'] != source['bytes']
+            or snapshot['source_sha256'] != source['sha256']
+            or snapshot['source_url'] != source['origin_url']):
+        raise ValueError('Source snapshot differs from the map input inventory')
 
 
 def local_files(out):
@@ -212,11 +275,22 @@ def local_files(out):
                          'source-inventory.json', places_provenance.FILENAME, *LICENSE_ASSETS} or
                 re.fullmatch(r'(?:lanes|limits|roadinfo)--?\d+_-?\d+\.json', name) or
                 PLACE_TILE.fullmatch(name) or
+                ROAD_DETAIL_TILE.fullmatch(name) or
+                FEATURE_PACK.fullmatch(name) or RELATION_PACK.fullmatch(name) or
+                name in DETAIL_MANIFESTS or name == 'source-checkpoint.json' or
+                name == 'osm-source-manifest.json' or SNAPSHOT_PART.fullmatch(name) or
                 regional.is_regional_asset(name)):
             raise ValueError('Unexpected map output file')
         size = path.stat().st_size
         if not 0 < size <= MAX_ASSET_BYTES:
             raise ValueError('Empty or oversized map asset')
+        if name == 'osm-source-manifest.json' or SNAPSHOT_PART.fullmatch(name):
+            files[name] = path
+            continue
+        if (FEATURE_PACK.fullmatch(name) or RELATION_PACK.fullmatch(name)
+                or name in DETAIL_MANIFESTS or name == 'source-checkpoint.json'):
+            files[name] = path
+            continue
         if regional.is_regional_asset(name):
             # Whole-set consistency is checked by validate_staged() below.
             if name.endswith('.pmtiles'):
@@ -239,7 +313,13 @@ def local_files(out):
         elif name.endswith('.json.gz'):
             with gzip.open(path, 'rt', encoding='utf-8') as stream:
                 data = json.load(stream)
-            if name.startswith('mapillary-'):
+            if ROAD_DETAIL_TILE.fullmatch(name):
+                if (not isinstance(data, dict) or not isinstance(data.get('ways'), list)
+                        or not isinstance(data.get('source'), str)
+                        or not all(isinstance(w, dict) and isinstance(w.get('t'), dict)
+                                   and isinstance(w.get('g'), list) for w in data['ways'])):
+                    raise ValueError('Invalid preserved road details')
+            elif name.startswith('mapillary-'):
                 if not isinstance(data, dict):
                     raise ValueError('Invalid observation cache')
             elif not isinstance(data, list) or not all(isinstance(row, list) and len(row) == 5 for row in data):
@@ -275,6 +355,8 @@ def local_files(out):
     if not any(name.startswith('lanes-') for name in files) or not any(PLACE_TILE.fullmatch(name) for name in files):
         raise ValueError('Lane or place tiles missing')
     regional.validate_staged(files)
+    validate_source_snapshot(files)
+    validate_osm_details(files)
     return files
 
 
@@ -400,7 +482,77 @@ def pointer(github, tag, manifest_tag, manifest_path, directory, extra_tag=None)
         raise
 
 
-def publish(github, out, tag, extra_tag=None, navigation_data=False, licenses_dir=None):
+def release_groups(files, tag, extra_tag):
+    """Stable bounded shards, reserving a main-release slot for the final manifest."""
+    if type(ASSET_LIMIT) is not int or ASSET_LIMIT < 2 or type(MAIN_FILES) is not int or MAIN_FILES < 1:
+        raise ValueError('Invalid publication capacity')
+    names = sorted(files, key=lambda name: (name != 'drivemate.pmtiles', name != 'build-info.txt', name))
+    capacity = min(MAIN_FILES, ASSET_LIMIT - 1)
+    groups = [(tag, {name: files[name] for name in names[:capacity]})]
+    for offset in range(capacity, len(names), ASSET_LIMIT):
+        index = (offset - capacity) // ASSET_LIMIT + 1
+        shard_tag = extra_tag if index == 1 else checked_tag(tag + f'-part{index}')
+        groups.append((shard_tag, {name: files[name] for name in names[offset:offset + ASSET_LIMIT]}))
+    tags = [checked_tag(name) for name, _ in groups]
+    if LEGACY in tags or len(set(tags)) != len(tags):
+        raise ValueError('Immutable shard tag collision')
+    return groups
+
+
+def reusable_assets(github, files, directory, forbidden_tags):
+    """Reuse only pointer-pinned metadata also matching current immutable asset digests."""
+    legacy = github.inventory(LEGACY)
+    if 'latest.json' not in legacy:
+        return {}
+    old_pointer = github.download(LEGACY, 'latest.json', Path(directory) / 'reuse-pointer')
+    verify_inventory(legacy, {'latest.json': metadata(old_pointer, LEGACY)}, LEGACY)
+    doc = json.loads(old_pointer.read_text(encoding='utf-8'))
+    if not isinstance(doc, dict) or not doc.get('manifest_sha256'):
+        return {}  # Legacy pointers cannot provide the verified metadata needed for reuse.
+    manifest_tag = checked_tag(doc.get('manifest_tag', doc.get('tag')))
+    if manifest_tag == LEGACY or manifest_tag in forbidden_tags:
+        return {}
+    pinned = doc['manifest_sha256']
+    if not isinstance(pinned, str) or not re.fullmatch('[0-9a-f]{64}', pinned):
+        raise ValueError('Invalid old manifest hash')
+    archive = github.inventory(manifest_tag)
+    path = github.download(manifest_tag, 'manifest.json', Path(directory) / 'reuse-manifest')
+    if path.stat().st_size > 2 * 1024 * 1024 or digest(path) != pinned:
+        raise ValueError('Previous manifest does not match the published pointer')
+    verify_inventory(archive, {'manifest.json': metadata(path, manifest_tag)}, manifest_tag)
+    manifest = json.loads(path.read_text(encoding='utf-8'))
+    if (not isinstance(manifest, dict) or type(manifest.get('schema')) is not int
+            or manifest['schema'] != 1 or not isinstance(manifest.get('files'), dict)):
+        raise ValueError('Invalid previous manifest')
+    inventories, reused = {}, {}
+    for name, local in files.items():
+        # Online OwnMap constructs its PMTiles URL from the new main tag rather
+        # than assetDownload(). Keep the archive there for existing app versions.
+        if name == 'drivemate.pmtiles':
+            continue
+        previous = manifest['files'].get(name)
+        if not isinstance(previous, dict):
+            continue
+        old_tag = checked_tag(previous.get('tag'))
+        if old_tag == LEGACY or old_tag in forbidden_tags:
+            continue
+        wanted = metadata(local, old_tag)
+        if previous != wanted:
+            continue
+        if old_tag not in inventories:
+            inventories[old_tag] = github.inventory(old_tag)
+        verify_inventory(inventories[old_tag], {name: wanted}, old_tag)
+        reused[name] = wanted
+    return reused
+
+
+def verify_reused(github, reused):
+    for old_tag in sorted({entry['tag'] for entry in reused.values()}):
+        expected = {name: entry for name, entry in reused.items() if entry['tag'] == old_tag}
+        verify_inventory(github.inventory(old_tag), expected, old_tag)
+
+
+def publish(github, out, tag, extra_tag=None, navigation_data=False, licenses_dir=None, reuse_unchanged=False):
     checked_tag(tag)
     extra_tag = checked_tag(extra_tag or tag + '-extra')
     if tag == LEGACY or tag == extra_tag or extra_tag == LEGACY:
@@ -424,14 +576,18 @@ def publish(github, out, tag, extra_tag=None, navigation_data=False, licenses_di
     if navigation_data:
         # Checked after the snapshot comparison: these are not build output.
         files.update(licence_files(licenses_dir))
-    # Keep the map and build metadata in the main release; stable ordering for restartability.
-    names = sorted(files, key=lambda name: (name != 'drivemate.pmtiles', name != 'build-info.txt', name))
-    main = {name: files[name] for name in names[:MAIN_FILES]}
-    extra = {name: files[name] for name in names[MAIN_FILES:]}
-    if len(extra) > ASSET_LIMIT:
-        raise ValueError('Map inventory exceeds two release capacity')
-    manifest_files = {name: metadata(path, tag if name in main else extra_tag) for name, path in files.items()}
+    # Validate all prospective shard tags before any remote release mutation.
+    if len(files) > MAX_MANIFEST_ENTRIES:
+        raise ValueError('Manifest exceeds the current Android entry limit; indexed schema upgrade required')
+    all_groups = release_groups(files, tag, extra_tag)
     with tempfile.TemporaryDirectory(prefix='drivemate-publish-') as temporary:
+        reused = reusable_assets(github, files, temporary, {name for name, _ in all_groups}) if reuse_unchanged else {}
+        pending = {name: path for name, path in files.items() if name not in reused}
+        groups = release_groups(pending, tag, extra_tag)
+        main = groups[0][1]
+        manifest_files = dict(reused)
+        for shard_tag, shard_files in groups:
+            manifest_files.update({name: metadata(path, shard_tag) for name, path in shard_files.items()})
         manifest_doc = {'schema': 1, 'files': manifest_files}
         if 'source-inventory.json' in files:
             manifest_doc['source_inventory'] = {
@@ -439,17 +595,19 @@ def publish(github, out, tag, extra_tag=None, navigation_data=False, licenses_di
                 'sha256': digest(files['source-inventory.json']),
                 'scope': 'Selected inputs; rights not independently verified'}
         manifest = write_json(temporary, 'manifest.json', manifest_doc)
+        if manifest.stat().st_size > MAX_MANIFEST_BYTES:
+            raise ValueError('Manifest exceeds the current Android byte limit; indexed schema upgrade required')
         main['manifest.json'] = manifest
-        if extra:
-            upload_immutable(github, extra_tag, extra)
+        for shard_tag, shard_files in groups[1:]:
+            upload_immutable(github, shard_tag, shard_files)
         # Upload the main manifest last, after all extra and main data assets exist.
         upload_immutable(github, tag, main)
-        # Re-inventory both releases immediately before making this version discoverable.
-        verify_inventory(github.inventory(tag), {name: metadata(path, tag) for name, path in main.items()}, tag, exact=True)
-        if extra:
-            verify_inventory(github.inventory(extra_tag), {name: metadata(path, extra_tag) for name, path in extra.items()}, extra_tag, exact=True)
+        # Every new shard and reused immutable asset must still agree before promotion.
+        for shard_tag, shard_files in groups:
+            verify_inventory(github.inventory(shard_tag), {name: metadata(path, shard_tag) for name, path in shard_files.items()}, shard_tag, exact=True)
+        verify_reused(github, reused)
         github.ensure_release(LEGACY)
-        pointer(github, tag, tag, manifest, temporary, extra_tag if extra else None)
+        pointer(github, tag, tag, manifest, temporary, extra_tag if len(groups) > 1 else None)
 
 
 def bootstrap(github, tag):
@@ -508,11 +666,12 @@ def main():
             command.add_argument('--out', type=Path, required=True)
             command.add_argument('--extra-tag')
             command.add_argument('--navigation-data', action='store_true')
+            command.add_argument('--reuse-unchanged', action='store_true')
     args = parser.parse_args()
     try:
         github = GitHub(args.repo)
         if args.mode == 'publish':
-            publish(github, args.out, args.tag, args.extra_tag, args.navigation_data)
+            publish(github, args.out, args.tag, args.extra_tag, args.navigation_data, reuse_unchanged=args.reuse_unchanged)
         else:
             bootstrap(github, args.tag)
     except (ValueError, OSError, GitHubError, json.JSONDecodeError) as exc:

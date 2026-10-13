@@ -8,6 +8,10 @@ after all its assets have uploaded and their SHA-256 hashes and sizes match.
 
 | File | What it is |
 |---|---|
+| `feature-packs-<row>_<col>.jsonl.gz`, global pack and `feature-packs-manifest.json` | Original exported OSM feature IDs, all tags and geographic geometry, including unnamed signals, entrances, kerbs and markings where mapped. Regional gzip NDJSON supports streaming readers; large features are retained in the global pack. New app integration is required to display/query them |
+| `relation-packs-<bucket>.jsonl.gz` and `relation-packs-manifest.json` | OSM relations with all tags and ordered typed member references/roles, including mapped lane connections and turn restrictions. Index bucket is relation ID divided by 100,000; these are source facts, not inferred lane paths |
+| `osm-source-manifest.json` and `osm-source.partNNNNN` | Exact complete supplied OSM PBF, split into checked source archive chunks. Retains objects geographic export cannot represent; not a default phone download |
+| `source-checkpoint.json` | Verified source identity and builder fingerprint. Daily checks compare the Geofabrik change signal; only successfully published generations advance the checkpoint |
 | `drivemate.pmtiles` | Map pictures for the UK (the app streams just the parts it needs) |
 | `lanes-<row>_<col>.json` (in release `map-data-uk-extra`, like limits, roadinfo, charge zones and search) | Lane counts and lane arrows, in half-degree squares (arrows from OpenStreetMap, plus painted arrows seen in Mapillary street photos where the map has none: `turn:lanes:source=mapillary`) |
 | `mapillary-arrows-cache.json.gz` | The painted arrows found near each junction, kept so each week only re-checks the oldest |

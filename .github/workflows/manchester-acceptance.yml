@@ -7,7 +7,7 @@ name: Greater Manchester turn-restriction acceptance
 # nothing is published, repaired or uploaded.
 on:
   schedule:
-    - cron: "17 21 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
+    - cron: "17 21 * * *" # Every evening (UTC), checked before daily map publication
   workflow_dispatch:
   push:
     branches: [codex/architecture-foundation]

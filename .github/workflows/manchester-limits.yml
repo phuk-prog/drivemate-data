@@ -6,7 +6,7 @@ name: Greater Manchester speed limit and camera acceptance
 # Detection only: nothing is published.
 on:
   schedule:
-    - cron: "7 22 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
+    - cron: "7 22 * * *" # Every evening (UTC), checked before daily map publication
   workflow_dispatch:
   push:
     branches: [codex/architecture-foundation]

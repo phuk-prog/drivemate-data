@@ -7,7 +7,7 @@ name: Greater Manchester route cross-check (Valhalla vs OSRM)
 # Valhalla, plus restriction types Valhalla 3.6.3 does not enforce (as restriction acceptance).
 on:
   schedule:
-    - cron: "7 20 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
+    - cron: "7 20 * * *" # Every evening (UTC), checked before daily map publication
   workflow_dispatch:
     inputs:
       journeys:

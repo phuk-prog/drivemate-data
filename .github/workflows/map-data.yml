@@ -21,8 +21,9 @@ on:
         options: [all, routing]
   schedule:
     - cron: "7 1 * * 1" # every Monday 01:07 UTC (2am UK summer), after Sunday's checks
+    - cron: "7 1 * * 0,2-6" # lightweight daily OSM change checks; rebuild only when needed
   push:
-    branches: [main]
+    branches: [main, codex/map-details-daily-updates]
     paths: [".github/workflows/map-data.yml", "scripts/**"]
 
 permissions:
@@ -41,10 +42,93 @@ env:
   PLANETILER_SHA256: 5e5e7d8c4fc89b4573cc9109d0a543c3c2c798b2bcde7c3dcd2214031ee59c29
 
 jobs:
-  build:
+  activate_verified_builder:
+    needs: [build, routing]
+    if: github.ref == 'refs/heads/codex/map-details-daily-updates' && github.event_name == 'push' && needs.build.result == 'success' && needs.routing.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Activate only the exact verified source without overwriting newer main work
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_BASE: a446223222fc31847c778b5c48355a09966f7999
+        run: |
+          set -euo pipefail
+          current=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [ "$current" = "$GITHUB_SHA" ]; then
+            echo 'This verified source is already active; no duplicate production run requested'
+            exit 0
+          fi
+          [ "$current" = "$EXPECTED_BASE" ] || { echo 'Main changed during validation; activation stopped'; exit 1; }
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/main" \
+            -f sha="$GITHUB_SHA" -F force=false > /dev/null
+          actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          [ "$actual" = "$GITHUB_SHA" ] || { echo 'Verified source activation did not match'; exit 1; }
+          # A workflow_dispatch is deliberate: GITHUB_TOKEN pushes do not start push workflows.
+          gh workflow run map-data.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f validate_only=false -f components=all
+
+  probe:
     if: inputs.components != 'routing'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      rebuild: ${{ steps.observe.outputs.rebuild }}
+      source_md5: ${{ steps.observe.outputs.source_md5 }}
+      pipeline_sha256: ${{ steps.observe.outputs.pipeline_sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Check the source against the last verified published checkpoint
+        id: observe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE_BUILD: ${{ github.event_name != 'schedule' || github.event.schedule == '7 1 * * 1' }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$FORCE_BUILD" = true ]; then args+=(--force); fi
+          python3 scripts/daily_source_remote.py --repo . --github-repo "$GITHUB_REPOSITORY" \
+            --source-url "https://download.geofabrik.de/${REGION}-latest.osm.pbf" \
+            --output-dir work/probe "${args[@]}"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          decision = json.loads(Path('work/probe/decision.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"rebuild={str(decision['rebuild']).lower()}\n")
+              output.write(f"source_md5={decision['change_signal']['value']}\n")
+              output.write(f"pipeline_sha256={decision['pipeline_sha256']}\n")
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('OSM update required: ' + str(decision['rebuild']) + '\n\n')
+              summary.write('\n'.join('- ' + reason for reason in decision['reasons']) + '\n')
+          PY
+      - name: Retain the source-check decision
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: daily-osm-check-${{ github.run_id }}-${{ github.run_attempt }}
+          path: work/probe/*.json
+          retention-days: 3
+          if-no-files-found: warn
+
+  build:
+    needs: probe
+    if: inputs.components != 'routing' && needs.probe.outputs.rebuild == 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 350
+    env:
+      SOURCE_MD5: ${{ needs.probe.outputs.source_md5 }}
+      PIPELINE_SHA256: ${{ needs.probe.outputs.pipeline_sha256 }}
+    outputs:
+      source_sha256: ${{ steps.downloaded_source.outputs.source_sha256 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -92,8 +176,22 @@ jobs:
           if [ "$code" = "200" ]; then echo "::notice::Ordnance Survey key works"; else echo "::warning::Ordnance Survey key check returned HTTP $code"; fi
 
       - name: OpenStreetMap base (Geofabrik, whole UK)
+        id: downloaded_source
         run: |
+          set -euo pipefail
+          printf '%s  %s\n' "$SOURCE_MD5" "${REGION##*/}-latest.osm.pbf" > work/source-before.md5
           curl -sSfL -o work/base.osm.pbf "https://download.geofabrik.de/${REGION}-latest.osm.pbf"
+          curl --fail --silent --show-error --location --proto '=https' --max-time 30 --max-filesize 4096 \
+            -o work/source-after.md5 "https://download.geofabrik.de/${REGION}-latest.osm.pbf.md5"
+          python3 scripts/daily_source_probe.py checkpoint \
+            --source-url "https://download.geofabrik.de/${REGION}-latest.osm.pbf" \
+            --signal-before work/source-before.md5 --signal-after work/source-after.md5 \
+            --pipeline-sha256 "$PIPELINE_SHA256" --pbf work/base.osm.pbf --output out/source-checkpoint.json
+          python3 - <<'PY'
+          import json, os
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('source_sha256=' + json.load(open('out/source-checkpoint.json'))['source_sha256'] + '\n')
+          PY
           ls -lh work/base.osm.pbf
 
       - name: Our own map tiles (Planetiler, same layout the app's map style uses)
@@ -113,6 +211,25 @@ jobs:
           echo "map_bytes=$(stat -c %s out/drivemate.pmtiles)" >> out/build-info.txt
           # A real UK map is hundreds of MB; a tiny file means the build failed.
           [ $(stat -c %s out/drivemate.pmtiles) -gt 50000000 ] || { echo "::error::Map file is too small - build failed"; exit 1; }
+
+      - name: Preserve the complete OSM input without discarding unknown map details
+        run: |
+          set -euo pipefail
+          # Parse the real input before archiving; byte checks alone do not validate OSM.
+          osmium fileinfo -e work/base.osm.pbf > work/osm-source-fileinfo.txt
+          python3 scripts/osm_source_snapshot.py retain --source work/base.osm.pbf \
+            --output out/osm-source --source-url "https://download.geofabrik.de/${REGION}-latest.osm.pbf"
+          python3 scripts/osm_source_snapshot.py verify out/osm-source
+          # Source archives are not automatically downloaded onto the phone.
+
+      - name: Preserve all exported geographic features and relation links in app-readable packs
+        run: |
+          set -euo pipefail
+          osmium export work/base.osm.pbf -f geojsonseq --geometry-types=point,linestring,polygon \
+            -a type,id | python3 scripts/osm_feature_packs.py --source - --output out/features
+          osmium cat --object-type relation work/base.osm.pbf -f opl,add_metadata=false -o work/all-objects.opl --overwrite
+          python3 scripts/osm_relation_packs.py --input work/all-objects.opl --output out/relation-packs
+          rm work/all-objects.opl
 
       - name: Verify every generated map payload before producing navigation layers
         run: python3 scripts/verify_pmtiles.py out/drivemate.pmtiles work/pmtiles-validation.json --uk-samples
@@ -406,13 +523,13 @@ jobs:
       - name: Verify publication rules
         run: python3 -m unittest discover -s tests -v
 
-      - name: Scheduled builds publish only after Sunday's checks all passed
+      - name: Scheduled builds publish only after fresh regional checks all passed
         if: github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          # Each check must have a successful scheduled run on main within the last 30 hours.
+          # Each daily regional check must have a successful scheduled run on main within the last 30 hours.
           # A missing, failed or cancelled check stops publishing; phones keep last week's data.
           for wf in route-crosscheck.yml manchester-acceptance.yml manchester-limits.yml manchester-search.yml; do
             ok=$(gh run list --workflow "$wf" --branch main --event schedule --limit 1 --json conclusion,createdAt \
@@ -421,12 +538,12 @@ jobs:
           done
 
       - name: Publish a complete immutable generation, then update the pointer
-        if: github.event_name != 'workflow_dispatch' || inputs.validate_only == false
+        if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.validate_only == false)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 scripts/publish_map_data.py publish --repo phuk-prog/drivemate-data \
-            --tag "map-data-$(date -u +%Y%m%d)-r${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" --out out --navigation-data
+            --tag "map-data-$(date -u +%Y%m%d)-r${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" --out out --navigation-data --reuse-unchanged
 
       - name: Retain map validation evidence
         if: always()
@@ -458,6 +575,7 @@ jobs:
     timeout-minutes: 300
     env:
       RTAG: routing-uk
+      EXPECTED_MAP_SOURCE_SHA256: ${{ needs.build.outputs.source_sha256 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -478,6 +596,9 @@ jobs:
       - name: OpenStreetMap base (Geofabrik, whole UK)
         run: |
           curl -sSfL -o work/base.osm.pbf "https://download.geofabrik.de/${REGION}-latest.osm.pbf"
+          if [ -n "${EXPECTED_MAP_SOURCE_SHA256:-}" ]; then
+            printf '%s  %s\n' "$EXPECTED_MAP_SOURCE_SHA256" work/base.osm.pbf | sha256sum --check --strict
+          fi
           sha256sum work/base.osm.pbf | cut -d' ' -f1 > work/source.sha256
           date -u +%FT%TZ > work/source-retrieved.txt
           ls -lh work/base.osm.pbf
@@ -542,7 +663,7 @@ jobs:
           cat work/routing-connectivity.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish the road graph
-        if: github.event_name != 'workflow_dispatch' || inputs.validate_only == false
+        if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.validate_only == false)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

@@ -71,9 +71,20 @@ def annotate(inventory, available=None):
             if info.get("bounds") is None:
                 raise ValueError(f"Detail package without bounds: {name}")
             info["companions"] = companion_names(info["bounds"], available)
+            if available is not None and 'feature-packs-manifest.json' in available:
+                # Separate optional property: old Android readers reject unknown
+                # layers inside companions, but safely ignore this new property.
+                candidates = [f'feature-packs-{r}_{c}.jsonl.gz'
+                              for r, c in squares_for_bounds(info['bounds'], 2)]
+                candidates.append('feature-packs-global.jsonl.gz')
+                info['osm_detail_files'] = sorted(n for n in candidates if n in available)
         packages[name] = info
     out["packages"] = packages
     out["national_files"] = [n for n in NATIONAL_FILES if available is None or n in available]
+    if available is not None:
+        catalogs = [n for n in ('feature-packs-manifest.json', 'relation-packs-manifest.json') if n in available]
+        if catalogs:
+            out['osm_detail_catalogs'] = catalogs
     out["companion_grids"] = {
         "half_degree": {"layers": list(HALF_DEGREE_LAYERS), "key": "floor(lat*2)_floor(lon*2)"},
         "quarter_degree": {"layers": list(QUARTER_DEGREE_LAYERS), "key": "floor(lat*4)_floor(lon*4)"},

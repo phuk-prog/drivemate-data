@@ -4,7 +4,7 @@ name: Manchester search check
 # that real Greater Manchester places are found where they should be. Nothing is published.
 on:
   schedule:
-    - cron: "57 22 * * 0" # Sunday evening (UTC), checked before the Monday build publishes
+    - cron: "57 22 * * *" # Every evening (UTC), checked before daily map publication
   workflow_dispatch:
   push:
     paths:

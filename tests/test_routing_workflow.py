@@ -14,7 +14,30 @@ class RoutingWorkflowTest(unittest.TestCase):
             publisher = next(step for step in workflow['jobs'][job]['steps']
                              if step.get('name', '').startswith('Publish'))
             self.assertEqual(publisher['if'],
-                             "github.event_name != 'workflow_dispatch' || inputs.validate_only == false")
+                             "github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.validate_only == false)")
+
+    def test_daily_probe_precedes_build_and_every_scheduled_publication_is_gated(self):
+        path = Path(__file__).resolve().parents[1] / '.github/workflows/map-data.yml'
+        workflow = yaml.safe_load(path.read_text())
+        triggers = workflow.get('on', workflow.get(True))
+        self.assertEqual({'7 1 * * 1', '7 1 * * 0,2-6'}, {item['cron'] for item in triggers['schedule']})
+        self.assertEqual('probe', workflow['jobs']['build']['needs'])
+        self.assertIn("needs.probe.outputs.rebuild == 'true'", workflow['jobs']['build']['if'])
+        gate = next(step for step in workflow['jobs']['build']['steps']
+                    if step.get('name', '').startswith('Scheduled builds publish'))
+        self.assertEqual("github.event_name == 'schedule'", gate['if'])
+        self.assertEqual('map-data', workflow['concurrency']['group'])
+        self.assertIs(workflow['concurrency']['cancel-in-progress'], False)
+
+    def test_full_feature_export_cannot_hide_upstream_failure(self):
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github/workflows/map-data.yml').read_text())
+        export = next(step['run'] for step in workflow['jobs']['build']['steps']
+                      if step.get('name', '').startswith('Preserve all exported'))
+        prefix = export.split('osmium export', 1)[0]
+        failed = subprocess.run(['bash', '-c', prefix + 'false | cat'], capture_output=True)
+        self.assertNotEqual(0, failed.returncode)
+        self.assertIn('--source -', export)
+        self.assertIn('--object-type relation', export)
 
     def test_oversized_map_keeps_house_numbers_and_stops(self):
         path = Path(__file__).resolve().parents[1] / '.github/workflows/map-data.yml'
